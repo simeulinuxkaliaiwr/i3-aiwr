@@ -11,6 +11,10 @@
 #include "all.h"
 
 #include <unistd.h>
+#include <math.h>
+#include "../include/i3/rounded_corners.h"
+#include "../include/i3/gradient_border.h"
+#include "../include/i3/aiwr_capture.h"
 
 #ifndef MAX
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
@@ -254,6 +258,10 @@ void x_move_win(Con *src, Con *dest) {
 }
 
 static void _x_con_kill(Con *con) {
+    window_animation_on_close(con);
+    rounded_corners_forget(con);      /* i3-aiwr: desfaz a shape do cliente */
+    aiwr_stale_forget(con->frame.id); /* i3-aiwr: solta a última imagem guardada */
+    window_animation_forget(con->frame.id);
     if (con->colormap != XCB_NONE) {
         xcb_free_colormap(conn, con->colormap);
     }
@@ -452,6 +460,113 @@ static size_t x_get_border_rectangles(Con *con, xcb_rectangle_t rectangles[4]) {
     return count;
 }
 
+/* Caminho de retângulo arredondado (antialiased). */
+static void x_rounded_rect_path(cairo_t *cr, double x, double y, double w, double h, double r) {
+    if (w <= 0 || h <= 0) return;
+    if (r > w / 2.0) r = w / 2.0;
+    if (r > h / 2.0) r = h / 2.0;
+    if (r <= 0) {
+        cairo_rectangle(cr, x, y, w, h);
+        return;
+    }
+    cairo_new_sub_path(cr);
+    cairo_arc(cr, x + w - r, y + r, r, -M_PI / 2, 0);
+    cairo_arc(cr, x + w - r, y + h - r, r, 0, M_PI / 2);
+    cairo_arc(cr, x + r, y + h - r, r, M_PI / 2, M_PI);
+    cairo_arc(cr, x + r, y + r, r, M_PI, 3 * M_PI / 2);
+    cairo_close_path(cr);
+}
+
+/* Regiões do frame_buffer que a borda ocupa: os retângulos da borda e, com
+ * cantos arredondados, os 4 cantos internos da window_rect (o cliente é
+ * recortado ali e o anel da borda aparece por trás). */
+static size_t x_get_border_regions(Con *con, xcb_rectangle_t regions[8]) {
+    size_t count = x_get_border_rectangles(con, regions);
+    int radius = rounded_corners_radius_for(con);
+    if (count > 0 && radius > 0) {
+        Rect *w = &(con->window_rect);
+        int c = rounded_corners_inner_radius(con, radius) + 1;
+        if (c > (int)w->width / 2) c = w->width / 2;
+        if (c > (int)w->height / 2) c = w->height / 2;
+        if (c > 0) {
+            regions[count++] = (xcb_rectangle_t){w->x, w->y, c, c};
+            regions[count++] = (xcb_rectangle_t){w->x + w->width - c, w->y, c, c};
+            regions[count++] = (xcb_rectangle_t){w->x, w->y + w->height - c, c, c};
+            regions[count++] = (xcb_rectangle_t){w->x + w->width - c, w->y + w->height - c, c, c};
+        }
+    }
+    return count;
+}
+
+/*
+ * i3-aiwr: pinta a borda do con no frame_buffer — gradiente se ativo, senão a
+ * cor sólida. Com rounded corners a borda é um anel concêntrico: raio R no
+ * frame, raio R - espessura na window_rect (a mesma geometria que
+ * rounded_corners_apply põe nas Shapes do frame e do cliente). Só toca nas
+ * regiões da borda: titlebar (BS_NORMAL) fica intacta.
+ */
+static void x_paint_border(Con *con, struct Colortriple *color) {
+    xcb_rectangle_t regions[8];
+    size_t count = x_get_border_regions(con, regions);
+    if (count == 0 || con->frame_buffer.cr == NULL) return;
+
+    bool active = (con == focused || con_inside_focused(con));
+    cairo_pattern_t *pat = con->urgent ? NULL
+                                       : gradient_border_pattern(con->rect.width, con->rect.height, active);
+    int radius = rounded_corners_radius_for(con);
+
+    cairo_t *cr = con->frame_buffer.cr;
+    cairo_save(cr);
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    if (pat != NULL) {
+        cairo_set_source(cr, pat);
+    } else {
+        cairo_set_source_rgba(cr, color->child_border.red, color->child_border.green,
+                              color->child_border.blue, color->child_border.alpha);
+    }
+    for (size_t i = 0; i < count; i++) {
+        cairo_rectangle(cr, regions[i].x, regions[i].y, regions[i].width, regions[i].height);
+    }
+    if (radius > 0) {
+        Rect *w = &(con->window_rect);
+        cairo_clip(cr);
+        /* anel = arredondado externo menos arredondado interno */
+        cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
+        x_rounded_rect_path(cr, 0, 0, con->rect.width, con->rect.height, radius);
+        x_rounded_rect_path(cr, w->x, w->y, w->width, w->height,
+                            rounded_corners_inner_radius(con, radius));
+    }
+    cairo_fill(cr);
+    cairo_restore(cr);
+    if (pat != NULL) cairo_pattern_destroy(pat);
+}
+
+void x_gradient_border_repaint(Con *con) {
+    if (con == NULL || !con->mapped || con->window == NULL || !con_is_leaf(con)) return;
+    if (con->frame_buffer.id == XCB_NONE || con->frame.id == XCB_NONE) return;
+    if (con_border_style(con) == BS_NONE) return;
+
+    struct Colortriple *color;
+    if (con->urgent) {
+        color = &config.client.urgent;
+    } else if (con == focused || con_inside_focused(con)) {
+        color = &config.client.focused;
+    } else if (con->parent != NULL && con == TAILQ_FIRST(&(con->parent->focus_head))) {
+        color = &config.client.focused_inactive;
+    } else {
+        color = &config.client.unfocused;
+    }
+    x_paint_border(con, color);
+
+    xcb_rectangle_t regions[8];
+    size_t count = x_get_border_regions(con, regions);
+    for (size_t i = 0; i < count; i++) {
+        draw_util_copy_surface(&(con->frame_buffer), &(con->frame),
+                               regions[i].x, regions[i].y, regions[i].x, regions[i].y,
+                               regions[i].width, regions[i].height);
+    }
+}
+
 /*
  * Draws the decoration of the given container onto its parent.
  *
@@ -566,34 +681,32 @@ void x_draw_decoration(Con *con) {
 
     /* 3: draw a rectangle in border color around the client */
     if (p->border_style != BS_NONE && p->con_is_leaf) {
-        /* Fill the border. We don’t just fill the whole rectangle because some
-         * children are not freely resizable and we want their background color
-         * to "shine through". */
-        xcb_rectangle_t rectangles[4];
-        size_t rectangles_count = x_get_border_rectangles(con, rectangles);
-        for (size_t i = 0; i < rectangles_count; i++) {
-            draw_util_rectangle(&(con->frame_buffer), p->color->child_border,
-                                rectangles[i].x,
-                                rectangles[i].y,
-                                rectangles[i].width,
-                                rectangles[i].height);
-        }
+        /* i3-aiwr: gradiente e/ou anel arredondado, senão cor sólida */
+        x_paint_border(con, p->color);
 
         /* Highlight the side of the border at which the next window will be
          * opened if we are rendering a single window within a split container
          * (which is undistinguishable from a single window outside a split
-         * container otherwise. */
-        Rect br = con_border_style_rect(con);
-        if (TAILQ_NEXT(con, nodes) == NULL &&
-            TAILQ_PREV(con, nodes_head, nodes) == NULL &&
-            con->parent->type != CT_FLOATING_CON) {
-            if (p->parent_layout == L_SPLITH) {
-                draw_util_rectangle(&(con->frame_buffer), p->color->indicator,
-                                    r->width + (br.width + br.x), br.y, -(br.width + br.x), r->height + br.height);
-            } else if (p->parent_layout == L_SPLITV) {
-                draw_util_rectangle(&(con->frame_buffer), p->color->indicator,
-                                    br.x, r->height + (br.height + br.y), r->width + br.width, -(br.height + br.y));
+         * container otherwise). Com gradiente ativo não desenhamos o
+         * indicador (quebraria o degradê). */
+        cairo_pattern_t *probe = con->urgent ? NULL
+                                             : gradient_border_pattern(r->width, r->height,
+                                                                       con == focused || con_inside_focused(con));
+        if (probe == NULL) {
+            Rect br = con_border_style_rect(con);
+            if (TAILQ_NEXT(con, nodes) == NULL &&
+                TAILQ_PREV(con, nodes_head, nodes) == NULL &&
+                con->parent->type != CT_FLOATING_CON) {
+                if (p->parent_layout == L_SPLITH) {
+                    draw_util_rectangle(&(con->frame_buffer), p->color->indicator,
+                                        r->width + (br.width + br.x), br.y, -(br.width + br.x), r->height + br.height);
+                } else if (p->parent_layout == L_SPLITV) {
+                    draw_util_rectangle(&(con->frame_buffer), p->color->indicator,
+                                        br.x, r->height + (br.height + br.y), r->width + br.width, -(br.height + br.y));
+                }
             }
+        } else {
+            cairo_pattern_destroy(probe);
         }
     }
 
@@ -798,6 +911,12 @@ void x_deco_recurse(Con *con) {
     if ((con->type != CT_ROOT && con->type != CT_OUTPUT) &&
         (!leaf || con->mapped)) {
         x_draw_decoration(con);
+    }
+
+    /* i3-aiwr: aplica/remove as shapes dos cantos (com cache: só manda
+     * requests quando geometria ou raio mudam) */
+    if (leaf && con->window != NULL) {
+        rounded_corners_apply(con);
     }
 }
 
@@ -1010,6 +1129,13 @@ void x_push_node(Con *con) {
     /* We need to set shape when container becomes floating. */
     need_reshape |= con_is_floating(con) && !state->was_floating;
 
+    /* i3-aiwr: Force reshape when rounded corners are enabled and
+     * the frame dimensions have changed (so the corner mask is
+     * regenerated for the new size). */
+    if (config.rounded_corners.enabled && (state->rect.width != rect.width || state->rect.height != rect.height)) {
+        need_reshape = true;
+    }
+
     /* The pixmap of a borderless leaf container will not be used except
      * for the titlebar in a stack or tabs (issue #1013). */
     bool is_pixmap_needed = ((con_is_leaf(con) && con_border_style(con) != BS_NONE) ||
@@ -1104,6 +1230,7 @@ void x_push_node(Con *con) {
         if (con->frame_buffer.id != XCB_NONE) {
             draw_util_copy_surface(&(con->frame_buffer), &(con->frame), 0, 0, 0, 0, con->rect.width, con->rect.height);
         }
+        window_animation_on_map(con);
         xcb_flush(conn);
 
         memcpy(&(state->rect), &rect, sizeof(Rect));

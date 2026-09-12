@@ -301,12 +301,13 @@ endif
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
 
 # https://mesonbuild.com/howtox.html#add-math-library-lm-portably
-m_dep = cc.find_library('m', required: false)
+m_dep = cc.find_library('m', required: true)
 rt_dep = cc.find_library('rt', required: false)
 iconv_dep = cc.find_library('iconv', required: false)
 
 libsn_dep = dependency('libstartup-notification-1.0', method: 'pkg-config')
 xcb_dep = dependency('xcb', method: 'pkg-config')
+xcb_xfixes_dep = dependency('xcb-xfixes')
 xcb_xkb_dep = dependency('xcb-xkb', method: 'pkg-config')
 xcb_xinerama_dep = dependency('xcb-xinerama', method: 'pkg-config')
 xcb_randr_dep = dependency('xcb-randr', method: 'pkg-config')
@@ -316,8 +317,16 @@ xcb_util_cursor_dep = dependency('xcb-cursor', method: 'pkg-config')
 xcb_util_keysyms_dep = dependency('xcb-keysyms', method: 'pkg-config')
 xcb_util_wm_dep = dependency('xcb-icccm', method: 'pkg-config')
 xcb_util_xrm_dep = dependency('xcb-xrm', method: 'pkg-config')
+xcb_render_dep = dependency('xcb-render')
+xcb_renderutil_dep = dependency('xcb-renderutil')
+xcb_composite_dep = dependency('xcb-composite')
+xcb_damage_dep = dependency('xcb-damage')
+xcb_xfixed_dep = dependency('xcb-xfixes')
 xkbcommon_dep = dependency('xkbcommon', method: 'pkg-config')
 xkbcommon_x11_dep = dependency('xkbcommon-x11', method: 'pkg-config')
+x11 = dependency('x11')
+x11_xcb = dependency('x11-xcb')
+gl = dependency('gl')
 yajl_dep = dependency('yajl', method: 'pkg-config')
 libpcre_dep = dependency('libpcre2-8', version: '>=10', method: 'pkg-config')
 cairo_dep = dependency('cairo', version: '>=1.14.4', method: 'pkg-config')
@@ -424,6 +433,18 @@ i3srcs = [
   'src/xcb.c',
   'src/xcursor.c',
   'src/xinerama.c',
+  'src/rounded_corners.c',
+  'src/overview.c',
+  'src/gradient_border.c',
+  'src/aiwr_capture.c',
+  'src/config_directives_gradient_border.c',
+  'src/config_directives_overview.c',
+  'src/workspace_transition.c',
+  'src/window_animation.c',
+  'src/aiwr_bezier.c',
+  'src/aiwr_anim.c',
+  'src/scrolling.c',
+  'src/switcher.c',
 ]
 
 # Verify the perl interpreter is present for running parser_gen,
@@ -476,6 +497,16 @@ common_deps = [
   xcb_util_keysyms_dep,
   xcb_util_wm_dep,
   xcb_util_xrm_dep,
+  xcb_render_dep,
+  xcb_renderutil_dep,
+  xcb_composite_dep,
+  xcb_composite_dep,
+  xcb_xfixes_dep,
+  xcb_damage_dep,
+  x11,
+  x11_xcb,
+  gl,
+  xkbcommon_dep,
   xkbcommon_dep,
   xkbcommon_x11_dep,
   yajl_dep,

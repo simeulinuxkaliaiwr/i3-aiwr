@@ -443,6 +443,16 @@ void workspace_show(Con *workspace) {
         return;
     }
 
+    /* i3-aiwr: fotografa a workspace que vai sair da tela ENQUANTO ela ainda é
+     * a visível deste output (antes de zerar fullscreen_mode) e ainda está mapeada. */
+    {
+        Con *leaving = con_get_fullscreen_con(workspace->parent, CF_OUTPUT);
+        if (leaving != NULL && leaving != workspace) {
+            overview_snapshot_workspace(leaving);      /* thumbnail para o overview */
+            workspace_transition_begin(leaving, workspace);
+        }
+    }
+
     /* disable fullscreen for the other workspaces and get the workspace we are
      * currently on. */
     TAILQ_FOREACH (current, &(workspace->parent->nodes_head), nodes) {

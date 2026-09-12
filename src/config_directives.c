@@ -8,6 +8,7 @@
  *
  */
 #include "all.h"
+#include "../include/i3/gradient_border.h"
 
 #include <wordexp.h>
 
@@ -387,6 +388,8 @@ CFGFUN(workspace_layout, const char *layout) {
     } else if (strcmp(layout, "stacking") == 0 ||
                strcmp(layout, "stacked") == 0) {
         config.default_layout = L_STACKED;
+    } else if (strcmp(layout, "scrolling") == 0) {
+        config.default_layout = L_SCROLLING;
     } else {
         config.default_layout = L_TABBED;
     }
@@ -967,4 +970,119 @@ CFGFUN(bar_finish) {
     TAILQ_INSERT_TAIL(&barconfigs, current_bar, configs);
     /* Simply reset the pointer, but don't free the resources. */
     current_bar = NULL;
+}
+
+/*
+ * i3-aiwr: Configuration directives for rounded corners
+ *
+ * Config syntax:
+ *   rounded_corners enabled
+ *   rounded_corners disabled
+ *   rounded_corners_radius 8
+ *   rounded_corners_floating yes
+ *   rounded_corners_tiling yes
+ */
+
+CFGFUN(rounded_corners_toggle, const char *value) {
+     if (strcmp(value, "enabled") == 0) {
+         config.rounded_corners.enabled = true;
+        fprintf(stderr, "[i3-aiwr DEBUG] >>> ROUNDED_CORNERS ENABLED in config <<<\n");
+    } else if (strcmp(value, "disabled") == 0) {
+        config.rounded_corners.enabled = false;
+        fprintf(stderr, "[i3-aiwr DEBUG] >>> ROUNDED_CORNERS DISABLED in config <<<\n");
+    }
+}
+
+ CFGFUN(rounded_corners_radius, long radius) {
+     if (radius < 0) {
+         ELOG("rounded_corners_radius must be >= 0\n");
+         return;
+     }
+     if (radius > 64) {
+         ELOG("rounded_corners_radius clamped to 64 (was %ld)\n", radius);
+         radius = 64;
+     }
+     config.rounded_corners.radius = (int)radius;
+}
+
+CFGFUN(rounded_corners_floating, const char *value) {
+    config.rounded_corners.apply_to_floating = (strcmp(value, "yes") == 0);
+    LOG("i3-aiwr: rounded_corners_floating = %s\n", value);
+}
+
+CFGFUN(rounded_corners_tiling, const char *value) {
+    config.rounded_corners.apply_to_tiling = (strcmp(value, "yes") == 0);
+    LOG("i3-aiwr: rounded_corners_tiling = %s\n", value);
+}
+
+CFGFUN(overview_toggle_config, const char *value) {
+    if (strcmp(value, "enabled") == 0) {
+        overview_config.enabled = true;
+    } else {
+        overview_config.enabled = false;
+    }
+    fprintf(stderr, "[i3-aiwr] Overview: %s\n", overview_config.enabled ? "enabled" : "disabled");
+}
+
+CFGFUN(overview_thumbnail_scale, const char *scale) {
+    long value = atol(scale);
+    if (value < 1 || value > 100) {
+        ELOG("overview_thumbnail_scale must be between 1 and 100\n");
+        return;
+    }
+    overview_config.thumbnail_scale = (int)value;
+    fprintf(stderr, "[i3-aiwr] Overview: thumbnail_scale = %ld\n", value);
+}
+
+CFGFUN(overview_spacing, const char *spacing) {
+    overview_config.spacing = (int)atol(spacing);
+    fprintf(stderr, "[i3-aiwr] Overview: spacing = %d\n", overview_config.spacing);
+}
+
+CFGFUN(overview_animation_duration, const char *duration) {
+    overview_config.animation_duration_ms = (int)atol(duration);
+    fprintf(stderr, "[i3-aiwr] Overview: animation_duration = %dms\n",
+            overview_config.animation_duration_ms);
+}
+
+CFGFUN(overview_background_opacity, const char *opacity) {
+    long value = atol(opacity);
+    if (value < 0 || value > 100) {
+        ELOG("overview_background_opacity must be between 0 and 100\n");
+        return;
+    }
+    overview_config.background_opacity = (int)value;
+    fprintf(stderr, "[i3-aiwr] Overview: background_opacity = %d\n", (int)value);
+}
+CFGFUN(window_animation_curve, const char *name) {
+    FREE(window_animation_config.curve);
+    window_animation_config.curve = sstrdup(name);
+}
+CFGFUN(bezier, const char *spec) {
+    aiwr_curve_define_spec(spec);
+}
+CFGFUN(scrolling_default_width, const long pct) {
+    scrolling_config.default_width = (int)(pct < 5 ? 5 : (pct > 400 ? 400 : pct));
+}
+CFGFUN(scrolling_duration, const long ms) {
+    scrolling_config.duration_ms = (int)(ms < 0 ? 0 : (ms > 2000 ? 2000 : ms));
+}
+CFGFUN(scrolling_curve, const char *name) {
+    FREE(scrolling_config.curve);
+    scrolling_config.curve = sstrdup(name);
+}
+CFGFUN(scrolling_center_focus, const char *value) {
+    scrolling_config.center_focus = (strcmp(value, "enabled") == 0 || strcmp(value, "yes") == 0 ||
+                                     strcmp(value, "true") == 0 || strcmp(value, "on") == 0);
+}
+CFGFUN(switcher, const char *value) {
+    switcher_config.enabled = (strcmp(value, "enabled") == 0 || strcmp(value, "yes") == 0 ||
+                               strcmp(value, "true") == 0 || strcmp(value, "on") == 0);
+}
+CFGFUN(switcher_max_items, const long n) {
+    switcher_config.max_items = (int)(n < 2 ? 2 : (n > 32 ? 32 : n));
+}
+CFGFUN(switcher_preview, const char *value) {
+    switcher_config.show_preview = (strcmp(value, "enabled") == 0 || strcmp(value, "yes") == 0 ||
+                                    strcmp(value, "true") == 0 || strcmp(value, "on") == 0);
 }

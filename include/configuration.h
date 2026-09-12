@@ -15,6 +15,7 @@
 #include "queue.h"
 #include "i3.h"
 #include "tiling_drag.h"
+#include "i3/gradient_border.h"
 
 typedef struct IncludedFile IncludedFile;
 typedef struct Config Config;
@@ -25,6 +26,17 @@ extern Config config;
 extern SLIST_HEAD(modes_head, Mode) modes;
 extern TAILQ_HEAD(barconfig_head, Barconfig) barconfigs;
 extern TAILQ_HEAD(includedfiles_head, IncludedFile) included_files;
+
+/* Configuration structure for rounded corners.
+ * Lives inside the global `config` struct.
+ */
+typedef struct rounded_corners_config {
+    bool enabled;            /* Master toggle */
+    int radius;              /* Corner radius in logical pixels */
+    bool apply_to_borders;   /* Also round the i3 frame border, not just client */
+    bool apply_to_floating;  /* Apply to floating windows */
+    bool apply_to_tiling;    /* Apply to tiling windows */
+} rounded_corners_config_t;
 
 /**
  * Used during the config file lexing/parsing to keep the state of the lexer
@@ -280,6 +292,9 @@ struct Config {
 
     /* Disable gaps if there is only one container on the workspace */
     smart_gaps_t smart_gaps;
+
+    rounded_corners_config_t rounded_corners;
+
 };
 
 /**

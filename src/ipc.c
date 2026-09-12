@@ -460,6 +460,9 @@ void dump_node(yajl_gen gen, Con *con, bool inplace_restart) {
         case L_OUTPUT:
             ystr("output");
             break;
+        case L_SCROLLING:
+            ystr("scrolling");
+            break;
     }
 
     ystr("workspace_layout");
@@ -472,6 +475,9 @@ void dump_node(yajl_gen gen, Con *con, bool inplace_restart) {
             break;
         case L_TABBED:
             ystr("tabbed");
+            break;
+        case L_SCROLLING:
+            ystr("scrolling");
             break;
         default:
             DLOG("About to dump workspace_layout=%d (none of default/stacked/tabbed), this is a bug.\n", con->workspace_layout);

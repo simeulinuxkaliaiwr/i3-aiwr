@@ -114,3 +114,73 @@ CFGFUN(bar_strip_workspace_numbers, const char *value);
 CFGFUN(bar_strip_workspace_name, const char *value);
 CFGFUN(bar_start);
 CFGFUN(bar_finish);
+CFGFUN(rounded_corners_toggle, const char *value);
+CFGFUN(rounded_corners_radius, long radius);
+CFGFUN(rounded_corners_floating, const char *value);
+CFGFUN(rounded_corners_tiling, const char *value);
+CFGFUN(overview_toggle_config, const char *value);
+CFGFUN(overview_thumbnail_scale, const char *scale);
+CFGFUN(overview_spacing, const char *spacing);
+CFGFUN(overview_animation_duration, const char *duration);
+CFGFUN(overview_background_opacity, const char *opacity);
+CFGFUN(overview_wallpaper_path, const char *wallpaper_path);
+CFGFUN(overview_background_blur, const char *background_path);
+CFGFUN(dynamic_workspaces, const char *dynamic_workspaces);
+/* i3-aiwr: Overview extras */
+CFGFUN(overview_live_previews, const char *value);
+CFGFUN(overview_particles, const long count);
+CFGFUN(overview_fps, const long fps);
+CFGFUN(overview_border_color, const char *color);
+CFGFUN(overview_border_color_end, const char *color);
+CFGFUN(overview_border_inactive, const char *color);
+CFGFUN(overview_border_width, const long width);
+CFGFUN(overview_border_speed, const long speed);
+CFGFUN(overview_thumbnail_blur, long int thumbnail_blur);
+
+/* i3-aiwr: Gradient border */
+CFGFUN(gradient_border_toggle, const char *value);
+CFGFUN(gradient_border_color_start, const char *color);
+CFGFUN(gradient_border_color_end, const char *color);
+CFGFUN(gradient_border_inactive_start, const char *color);
+CFGFUN(gradient_border_inactive_end, const char *color);
+CFGFUN(gradient_border_direction, const char *direction);
+CFGFUN(gradient_border_angle, const long angle);
+CFGFUN(gradient_border_speed, const long speed);
+CFGFUN(gradient_border_fps, const long fps);
+
+/* i3-aiwr: workspace transition animation */
+CFGFUN(workspace_transition, const char *value);
+CFGFUN(workspace_transition_duration, const long duration_ms);
+CFGFUN(workspace_transition_direction, const char *direction);
+CFGFUN(workspace_transition_fps, const long fps);
+CFGFUN(workspace_transition_type, const char *type);
+CFGFUN(workspace_transition_curve, const char *name);
+
+/* i3-aiwr: window animations (open,close) */
+CFGFUN(window_animation, const char *value);
+CFGFUN(window_animation_duration, const long duration_ms);
+CFGFUN(window_animation_scale, const long scale);
+CFGFUN(window_animation_fps, const long fps);
+CFGFUN(window_animation_curve, const char *name);
+CFGFUN(window_animation_close, const char *value);
+CFGFUN(window_animation_close_duration, const long duration_ms);
+CFGFUN(window_animation_close_scale, const long scale);
+CFGFUN(window_animation_close_curve, const char *name);
+CFGFUN(window_animation_opacity, const char *value);
+CFGFUN(window_animation_start_opacity, const long pct);
+CFGFUN(window_animation_close_opacity, const long pct);
+CFGFUN(bezier, const char *spec);
+CFGFUN(spring, const char *spec);
+
+/* i3-aiwr: live resize */
+CFGFUN(resize_live, const char *value);
+CFGFUN(resize_live_fps, const long fps);
+
+CFGFUN(scrolling_default_width, const long pct);
+CFGFUN(scrolling_duration, const long ms);
+CFGFUN(scrolling_curve, const char *name);
+CFGFUN(scrolling_center_focus, const char *value);
+
+CFGFUN(switcher, const char *value);
+CFGFUN(switcher_max_items, const long n);
+CFGFUN(switcher_preview, const char *value);

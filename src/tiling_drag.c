@@ -8,7 +8,41 @@
  *
  */
 #include "all.h"
+#include <xcb/shape.h>
+#include <cairo/cairo-xcb.h>
+#include <math.h>
+#include <time.h>
+
 static xcb_window_t create_drop_indicator(Rect rect);
+static void drop_indicator_update(xcb_window_t win, Rect rect);
+static void drop_indicator_free(void);
+
+static struct {
+    xcb_window_t win;
+    surface_t surface;
+    uint32_t w, h;
+} drop_ind;
+
+static double drop_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
+}
+
+static void drop_rounded_path(cairo_t *cr, double x, double y, double w, double h, double r) {
+    if (r > w / 2.0) r = w / 2.0;
+    if (r > h / 2.0) r = h / 2.0;
+    if (r <= 0.5) {
+        cairo_rectangle(cr, x, y, w, h);
+        return;
+    }
+    cairo_new_sub_path(cr);
+    cairo_arc(cr, x + w - r, y + r, r, -M_PI / 2, 0);
+    cairo_arc(cr, x + w - r, y + h - r, r, 0, M_PI / 2);
+    cairo_arc(cr, x + r, y + h - r, r, M_PI / 2, M_PI);
+    cairo_arc(cr, x + r, y + r, r, M_PI, 3 * M_PI / 2);
+    cairo_close_path(cr);
+}
 
 static bool is_tiling_drop_target(Con *con) {
     if (!con_has_managed_window(con) ||
@@ -219,6 +253,7 @@ DRAGGING_CB(drag_callback) {
     /* target == con makes sense only when we are moving away from target's parent. */
     if (drop_type != DT_PARENT && target == con) {
         draw_window = false;
+        drop_indicator_free();
         xcb_destroy_window(conn, *(params->indicator));
         *(params->indicator) = 0;
         goto create_indicator;
@@ -254,6 +289,7 @@ create_indicator:
                                   XCB_CONFIG_WINDOW_WIDTH |
                                   XCB_CONFIG_WINDOW_HEIGHT;
             xcb_configure_window(conn, *(params->indicator), mask, values);
+            drop_indicator_update(*(params->indicator), rect);
         }
     }
     x_mask_event_mask(~XCB_EVENT_MASK_ENTER_WINDOW);
@@ -262,6 +298,82 @@ create_indicator:
     *(params->target) = target;
     *(params->direction) = direction;
     *(params->drop_type) = drop_type;
+}
+
+static void drop_indicator_shape(xcb_window_t win, uint32_t w, uint32_t h,
+                                 double radius, double bw) {
+    xcb_pixmap_t mask = xcb_generate_id(conn);
+    xcb_create_pixmap(conn, 1, mask, root, w, h);
+
+    cairo_surface_t *ms = cairo_xcb_surface_create_for_bitmap(conn, root_screen, mask, w, h);
+    cairo_t *mc = cairo_create(ms);
+    cairo_set_operator(mc, CAIRO_OPERATOR_CLEAR);
+    cairo_paint(mc);
+    cairo_set_operator(mc, CAIRO_OPERATOR_SOURCE);
+    cairo_set_source_rgba(mc, 1, 1, 1, 1);
+    cairo_set_fill_rule(mc, CAIRO_FILL_RULE_EVEN_ODD);
+    drop_rounded_path(mc, 0, 0, w, h, radius);
+    if (w > bw * 2 + 2 && h > bw * 2 + 2) {
+        drop_rounded_path(mc, bw, bw, w - bw * 2, h - bw * 2, radius - bw);
+    }
+    cairo_fill(mc);
+    cairo_destroy(mc);
+    cairo_surface_flush(ms);
+    cairo_surface_destroy(ms);
+
+    xcb_shape_mask(conn, XCB_SHAPE_SO_SET, XCB_SHAPE_SK_BOUNDING, win, 0, 0, mask);
+    xcb_free_pixmap(conn, mask);
+}
+
+static void drop_indicator_update(xcb_window_t win, Rect rect) {
+    if (win == XCB_NONE || rect.width < 4 || rect.height < 4) return;
+
+    const double bw = fmax(2.0, (double)logical_px(3));
+    const double radius = fmin(fmin(rect.width, rect.height) / 2.0, logical_px(12));
+
+    if (drop_ind.win != win || drop_ind.w != rect.width || drop_ind.h != rect.height) {
+        if (drop_ind.surface.id != XCB_NONE) {
+            draw_util_surface_free(conn, &drop_ind.surface);
+            memset(&drop_ind.surface, 0, sizeof(drop_ind.surface));
+        }
+        xcb_visualtype_t *vt = aiwr_find_visualtype(root_screen->root_visual);
+        if (vt == NULL) return;
+        draw_util_surface_init(conn, &drop_ind.surface, win, vt, rect.width, rect.height);
+        drop_ind.win = win;
+        drop_ind.w = rect.width;
+        drop_ind.h = rect.height;
+        drop_indicator_shape(win, rect.width, rect.height, radius, bw);
+    }
+
+    cairo_t *cr = drop_ind.surface.cr;
+    if (cr == NULL) return;
+
+    /* mesmo gradiente animado das bordas do overview */
+    const color_t a = overview_config.border_start;
+    const color_t b = overview_config.border_end;
+    const int speed = overview_config.border_speed > 0 ? overview_config.border_speed : 45;
+    const double phase = fmod(drop_now_ms() * speed / 1000.0, 360.0) * M_PI / 180.0;
+    const double cx = rect.width / 2.0, cy = rect.height / 2.0;
+    const double len = fmax(rect.width, rect.height);
+    cairo_pattern_t *pat = cairo_pattern_create_linear(
+        cx - cos(phase) * len, cy - sin(phase) * len,
+        cx + cos(phase) * len, cy + sin(phase) * len);
+    cairo_pattern_add_color_stop_rgb(pat, 0.0, a.red, a.green, a.blue);
+    cairo_pattern_add_color_stop_rgb(pat, 0.5, b.red, b.green, b.blue);
+    cairo_pattern_add_color_stop_rgb(pat, 1.0, a.red, a.green, a.blue);
+
+    cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+    cairo_set_source(cr, pat);
+    cairo_paint(cr);
+    cairo_pattern_destroy(pat);
+    cairo_surface_flush(drop_ind.surface.surface);
+}
+
+static void drop_indicator_free(void) {
+    if (drop_ind.surface.id != XCB_NONE) {
+        draw_util_surface_free(conn, &drop_ind.surface);
+    }
+    memset(&drop_ind, 0, sizeof(drop_ind));
 }
 
 /*
@@ -320,6 +432,7 @@ void tiling_drag(Con *con, xcb_button_press_event_t *event, bool use_threshold) 
     drag_result_t drag_result = drag_pointer(con, event, XCB_NONE, XCURSOR_CURSOR_MOVE, use_threshold, drag_callback, &params);
 
     /* Dragging is done. We don't need the indicator window any more. */
+    xcb_destroy_window(conn, indicator);
     xcb_destroy_window(conn, indicator);
 
     if (drag_result == DRAG_REVERT ||

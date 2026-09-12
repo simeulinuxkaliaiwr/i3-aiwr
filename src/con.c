@@ -78,6 +78,10 @@ Con *con_new(Con *parent, i3Window *window) {
  *
  */
 void con_free(Con *con) {
+    if (con->type == CT_WORKSPACE) {
+        overview_forget_workspace(con);
+    }
+
     free(con->name);
     FREE(con->deco_render_params);
     TAILQ_REMOVE(&all_cons, con, all_cons);
@@ -93,6 +97,12 @@ void con_free(Con *con) {
         FREE(mark->name);
         FREE(mark);
     }
+
+    if (con->type == CT_WORKSPACE) {
+        overview_forget_workspace(con);
+        scrolling_forget(con);
+    }
+
     DLOG("con %p freed\n", con);
     free(con);
 }
@@ -271,6 +281,7 @@ void con_focus(Con *con) {
         workspace_update_urgent_flag(con_get_workspace(con));
         ipc_send_window_event("urgent", con);
     }
+    scrolling_on_focus(con);
 }
 
 /*
@@ -395,7 +406,10 @@ bool con_is_split(Con *con) {
         case L_DOCKAREA:
         case L_OUTPUT:
             return false;
-
+            break;
+        case L_SCROLLING:
+            return false;
+            break;
         default:
             return true;
     }
@@ -1141,6 +1155,10 @@ void con_fix_percent(Con *con) {
     Con *child;
     int children = con_num_children(con);
 
+    if (con->layout == L_SCROLLING){
+        return;
+    }
+
     /* calculate how much we have distributed and how many containers with a
      * percentage set we have */
     double total = 0.0;
@@ -1637,6 +1655,8 @@ orientation_t con_orientation(Con *con) {
         case L_OUTPUT:
             ELOG("con_orientation() called on dockarea/output (%d) container %p\n", con->layout, con);
             assert(false);
+        case L_SCROLLING:
+            return HORIZ;
     }
     /* should not be reached */
     assert(false);
@@ -2018,12 +2038,12 @@ void con_set_layout(Con *con, layout_t layout) {
      * need to create a new split container. */
     if (con->type == CT_WORKSPACE) {
         if (con_num_children(con) == 0) {
-            layout_t ws_layout = (layout == L_STACKED || layout == L_TABBED) ? layout : L_DEFAULT;
+            layout_t ws_layout = (layout == L_STACKED || layout == L_TABBED || layout == L_SCROLLING) ? layout : L_DEFAULT;
             DLOG("Setting workspace_layout to %d\n", ws_layout);
             con->workspace_layout = ws_layout;
             DLOG("Setting layout to %d\n", layout);
             con->layout = layout;
-        } else if (layout == L_STACKED || layout == L_TABBED || layout == L_SPLITV || layout == L_SPLITH) {
+        } else if (layout == L_STACKED || layout == L_TABBED || layout == L_SPLITV || layout == L_SPLITH || L_SCROLLING) {
             DLOG("Creating new split container\n");
             /* 1: create a new split container */
             Con *new = con_new(NULL, NULL);

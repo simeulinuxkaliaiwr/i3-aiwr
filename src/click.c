@@ -44,6 +44,21 @@ static bool tiling_resize_for_border(Con *con, border_t border, xcb_button_press
             return false;
     }
 
+        Con *column = con;
+    while (column != NULL && column->parent != NULL &&
+           column->type != CT_WORKSPACE && column->type != CT_FLOATING_CON &&
+           column->parent->layout != L_SCROLLING) {
+        column = column->parent;
+    }
+    if (column != NULL && column->parent != NULL &&
+                column->parent->layout == L_SCROLLING &&
+                column->type != CT_WORKSPACE && column->type != CT_FLOATING_CON &&
+                (border == BORDER_LEFT || border == BORDER_RIGHT)) {
+        resize_graphical_handler(column, NULL, HORIZ, event, use_threshold, search_direction);
+        DLOG("After scrolling resize handler, rendering\n");
+        tree_render();
+        return true;
+    }
     bool res = resize_find_tiling_participants(&first, &second, search_direction, false);
     if (!res) {
         DLOG("No second container in this direction found.\n");
@@ -66,7 +81,7 @@ static bool tiling_resize_for_border(Con *con, border_t border, xcb_button_press
 
     const orientation_t orientation = ((border == BORDER_LEFT || border == BORDER_RIGHT) ? HORIZ : VERT);
 
-    resize_graphical_handler(first, second, orientation, event, use_threshold);
+    resize_graphical_handler(first, second, orientation, event, use_threshold, search_direction);
 
     DLOG("After resize handler, rendering\n");
     tree_render();

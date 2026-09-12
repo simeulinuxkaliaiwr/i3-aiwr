@@ -36,6 +36,7 @@ state INITIAL:
   'unmark' -> UNMARK
   'resize' -> RESIZE
   'rename' -> RENAME
+  'switcher' -> SWITCHER_CFG
   'nop' -> NOP
   'scratchpad' -> SCRATCHPAD
   'swap' -> SWAP
@@ -43,6 +44,8 @@ state INITIAL:
   'title_window_icon' -> TITLE_WINDOW_ICON
   'mode' -> MODE
   'bar' -> BAR
+  'scrolling' -> SCROLLING
+  'overview' -> OVERVIEW
   'gaps' -> GAPS
 
 state CRITERIA:
@@ -146,7 +149,7 @@ state GAPS_END:
 # layout default|stacked|stacking|tabbed|splitv|splith
 # layout toggle [split|all]
 state LAYOUT:
-  layout_mode = 'default', 'stacked', 'stacking', 'tabbed', 'splitv', 'splith'
+  layout_mode = 'default', 'stacked', 'stacking', 'tabbed', 'splitv', 'splith', 'scrolling'
       -> call cmd_layout($layout_mode)
   'toggle'
       -> LAYOUT_TOGGLE
@@ -525,6 +528,20 @@ state TITLE_WINDOW_ICON_PADDING:
     -> call cmd_title_window_icon($enable, &padding)
   padding = number
     ->
+
+state SCROLLING:
+  action = 'maximize', 'wider', 'narrower', 'left', 'right', 'toggle'
+    -> call cmd_scrolling($action)
+
+state SWITCHER_CFG:
+  direction = 'next', 'prev'
+    -> call cmd_switcher($direction)
+
+state OVERVIEW:
+  action = 'toggle', 'next', 'prev', 'select', 'cancel'
+    -> call cmd_overview($action)
+  end
+    -> call cmd_overview("toggle")
 
 # bar (hidden_state hide|show|toggle)|(mode dock|hide|invisible|toggle) [<bar_id>]
 state BAR:

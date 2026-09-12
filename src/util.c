@@ -95,6 +95,10 @@ bool layout_from_name(const char *layout_str, layout_t *out) {
         *out = L_TABBED;
         return true;
     }
+    if (strcasecmp(layout_str, "scrolling") == 0) {
+        *out = L_SCROLLING;
+        return true;
+    }
     if (strcasecmp(layout_str, "splitv") == 0) {
         *out = L_SPLITV;
         return true;

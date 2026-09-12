@@ -12,9 +12,14 @@
 #include <config.h>
 
 #include "commands_parser.h"
+#include "i3/scrolling.h"
+#include "all.h"
 
 /** The beginning of the prototype for every cmd_ function. */
 #define I3_CMD Match *current_match, struct CommandResultIR *cmd_output
+
+#define CMD_FUN(name, ...) \
+    void cmd_##name(I3_CMD, ##__VA_ARGS__)
 
 /**
  * Initializes the specified 'Match' data structure and the initial state of
@@ -343,3 +348,9 @@ void cmd_gaps(I3_CMD, const char *type, const char *scope, const char *mode, con
  *
  */
 void cmd_title_window_icon(I3_CMD, const char *enable, int padding);
+
+void cmd_scrolling(I3_CMD, const char *action);
+
+void cmd_overview(I3_CMD, const char *action);
+
+void cmd_switcher(I3_CMD, const char *direction);

@@ -105,7 +105,8 @@ typedef enum {
     L_DOCKAREA = 3,
     L_OUTPUT = 4,
     L_SPLITV = 5,
-    L_SPLITH = 6
+    L_SPLITH = 6,
+    L_SCROLLING = 7
 } layout_t;
 
 /**
@@ -726,6 +727,10 @@ struct Con {
     bool mark_changed;
 
     double percent;
+
+    double scroll_offset;
+    double scroll_width;
+    double scroll_prev_percent;
 
     /* the x11 border pixel attribute */
     int border_width;

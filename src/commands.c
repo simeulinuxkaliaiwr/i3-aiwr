@@ -561,6 +561,8 @@ void cmd_resize(I3_CMD, const char *way, const char *direction, long resize_px, 
         Con *floating_con;
         if ((floating_con = con_inside_floating(current->con))) {
             cmd_resize_floating(current_match, cmd_output, direction, floating_con, resize_px);
+        } else if (scrolling_resize_handled(current->con, direction, resize_px, resize_ppt)) {
+            /* a3-aiwr: adjutsts its own width */
         } else {
             if (strcmp(direction, "width") == 0 ||
                 strcmp(direction, "height") == 0) {
@@ -988,6 +990,34 @@ void cmd_mode(I3_CMD, const char *mode) {
     switch_mode(mode);
 
     // XXX: default reply for now, make this a better reply
+    ysuccess(true);
+}
+
+void cmd_scrolling(I3_CMD, const char *action) {
+    Con *con = focused;
+    if (strcmp(action, "maximize") == 0) {
+        scrolling_toggle_maximize(con);
+    } else if (strcmp(action, "wider") == 0) {
+        scrolling_cycle_width(con, false);
+    } else if (strcmp(action, "narrower") == 0) {
+        scrolling_cycle_width(con, true);
+    } else if (strcmp(action, "left") == 0) {
+        scrolling_scroll_by(con, -1);
+    } else if (strcmp(action, "right") == 0) {
+        scrolling_scroll_by(con, 1);
+    } else if (strcmp(action, "toggle") == 0) {
+        scrolling_toggle_layout(con);
+    } else {
+        yerror("Unknown scrolling action \"%s\"", action);
+        return;
+    }
+    cmd_output->needs_tree_render = false; /* já renderizamos */
+    ysuccess(true);
+}
+
+void cmd_switcher(I3_CMD, const char *direction) {
+    switcher_open(strcmp(direction, "prev") == 0);
+    cmd_output->needs_tree_render = false;
     ysuccess(true);
 }
 
@@ -2534,4 +2564,22 @@ void cmd_gaps(I3_CMD, const char *type, const char *scope, const char *mode, con
 
 error:
     ysuccess(false);
+}
+
+void cmd_overview(I3_CMD, const char *action) {
+    if (action == NULL || strcmp(action, "toggle") == 0) {
+        overview_toggle();
+    } else if (strcmp(action, "next") == 0) {
+        overview_next();
+    } else if (strcmp(action, "prev") == 0) {
+        overview_prev();
+    } else if (strcmp(action, "select") == 0) {
+        overview_select();
+    } else if (strcmp(action, "cancel") == 0) {
+        overview_cancel();
+    } else {
+        yerror("Unknown overview action: %s", action);
+        return;
+    }
+    ysuccess(true);
 }

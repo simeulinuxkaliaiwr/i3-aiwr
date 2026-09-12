@@ -14,6 +14,7 @@
 #include <time.h>
 
 #include <xcb/randr.h>
+#include <xkbcommon/xkbcommon.h>
 #define SN_API_NOT_YET_FROZEN 1
 #include <libsn/sn-monitor.h>
 
@@ -1411,6 +1412,14 @@ void handle_event(int type, xcb_generic_event_t *event) {
         DLOG("event type %d, xkb_base %d\n", type, xkb_base);
     }
 
+    /* i3-aiwr: Expose/teclado/mouse/scroll do overlay do overview. Precisa vir
+     * antes do switch porque handle_expose_event() ignora janelas que não são
+     * frames de Con e handle_key_press() consumiria as teclas. */
+    if (switcher_handle_event(event)) return;
+    if (overview_handle_event(event)) {
+        return;
+    }
+
     if (randr_base > -1 &&
         type == randr_base + XCB_RANDR_SCREEN_CHANGE_NOTIFY) {
         handle_screen_change(event);
@@ -1462,6 +1471,14 @@ void handle_event(int type, xcb_generic_event_t *event) {
 
         DLOG("shape_notify_event for window 0x%08x, shape_kind = %d, shaped = %d\n",
              shape->affected_window, shape->shape_kind, shape->shaped);
+
+        /* i3-aiwr: shape que nós mesmos pusemos no cliente (rounded corners):
+         * não é "janela shaped" para o i3, senão entraria em loop
+         * aplica -> notify -> shaped=true -> remove -> notify -> ... */
+        if (rounded_corners_owns_window(shape->affected_window)) {
+            DLOG("shape_notify for our own rounded-corner shape, ignoring\n");
+            return;
+        }
 
         Con *con = con_by_window_id(shape->affected_window);
         if (con == NULL) {

@@ -22,6 +22,10 @@ state INITIAL:
   'set_from_resource'                      -> IGNORE_LINE
   'include'                                -> INCLUDE
   bindtype = 'bindsym', 'bindcode', 'bind' -> BINDING
+  'rounded_corners_radius'                 -> ROUNDED_CORNERS_RADIUS
+  'rounded_corners_floating'               -> ROUNDED_CORNERS_FLOATING
+  'rounded_corners_tiling'                 -> ROUNDED_CORNERS_TILING
+  'rounded_corners'                        -> ROUNDED_CORNERS
   'bar'                                    -> BARBRACE
   'font'                                   -> FONT
   'mode'                                   -> MODENAME
@@ -32,7 +36,16 @@ state INITIAL:
   'floating_maximum_size'                  -> FLOATING_MAXIMUM_SIZE_WIDTH
   'floating_modifier'                      -> FLOATING_MODIFIER
   'default_orientation'                    -> DEFAULT_ORIENTATION
+  'workspace_transition'                   -> WORKSPACE_TRANSITION
   'workspace_layout'                       -> WORKSPACE_LAYOUT
+  'window_animation'                       -> WINDOW_ANIMATION
+  'geometry_animation'                     -> IGNORE_LINE
+  'bezier'                                 -> BEZIER
+  'spring'                                 -> SPRING
+  'resize_live_fps'                        -> RESIZE_LIVE_FPS
+  'resize_live'                            -> RESIZE_LIVE
+  'scrolling'                              -> SCROLLING
+  'dynamic_workspaces'                     -> DYNAMIC_WORKSPACES
   windowtype = 'default_border', 'new_window', 'default_floating_border', 'new_float'
       -> DEFAULT_BORDER
   'hide_edge_borders'                      -> HIDE_EDGE_BORDERS
@@ -52,8 +65,11 @@ state INITIAL:
   'title_align'                            -> TITLE_ALIGN
   'show_marks'                             -> SHOW_MARKS
   'workspace'                              -> WORKSPACE
+  'switcher'                               -> SWITCHER
   'ipc_socket', 'ipc-socket'               -> IPC_SOCKET
   'ipc_kill_timeout'                       -> IPC_KILL_TIMEOUT
+  'overview'                               -> OVERVIEW
+  'gradient_border'                        -> GRADIENT_BORDER
   'restart_state'                          -> RESTART_STATE
   'popup_during_fullscreen'                -> POPUP_DURING_FULLSCREEN
   'tiling_drag'                            -> TILING_DRAG
@@ -82,6 +98,328 @@ state GAPS_END:
       ->
   end
       -> call cfg_gaps($workspace, $scope, &value)
+
+state SWITCHER:
+  'enabled' -> call cfg_switcher("enabled")
+  'disabled' -> call cfg_switcher("disabled")
+  'max_items' -> SWITCHER_MAX_ITEMS
+  'preview' -> SWITCHER_PREVIEW
+
+state SWITCHER_MAX_ITEMS:
+  n = number
+    -> call cfg_switcher_max_items(&n)
+
+state SWITCHER_PREVIEW:
+  'enabled' -> call cfg_switcher_preview("enabled")
+  'disabled' -> call cfg_switcher_preview("disabled")
+
+
+state ROUNDED_CORNERS:
+  value = string
+    -> call cfg_rounded_corners_toggle($value); INITIAL
+
+state ROUNDED_CORNERS_RADIUS:
+    radius = number
+        -> call cfg_rounded_corners_radius(&radius); INITIAL
+
+state ROUNDED_CORNERS_FLOATING:
+    value = string
+        -> call cfg_rounded_corners_floating($value); INITIAL
+
+state ROUNDED_CORNERS_TILING:
+    value = string
+        -> call cfg_rounded_corners_tiling($value); INITIAL
+
+################################################################################
+# i3-aiwr: overview
+################################################################################
+
+state OVERVIEW:
+  'enabled' -> call cfg_overview_toggle_config("enabled")
+  'disabled' -> call cfg_overview_toggle_config("disabled")
+  'thumbnail_scale' -> OVERVIEW_THUMBNAIL_SCALE
+  'thumbnail_blur' -> OVERVIEW_THUMBNAIL_BLUR
+  'spacing' -> OVERVIEW_SPACING
+  'animation_duration' -> OVERVIEW_ANIMATION_DURATION
+  'background_opacity' -> OVERVIEW_BACKGROUND_OPACITY
+  'background_blur' -> OVERVIEW_BACKGROUND_BLUR
+  'wallpaper_path' -> OVERVIEW_WALLPAPER_PATH
+  'live_previews' -> OVERVIEW_LIVE_PREVIEWS
+  'particles' -> OVERVIEW_PARTICLES
+  'fps' -> OVERVIEW_FPS
+  'border_color_end' -> OVERVIEW_BORDER_COLOR_END
+  'border_color' -> OVERVIEW_BORDER_COLOR
+  'border_inactive' -> OVERVIEW_BORDER_INACTIVE
+  'border_width' -> OVERVIEW_BORDER_WIDTH
+  'border_speed' -> OVERVIEW_BORDER_SPEED
+
+state OVERVIEW_THUMBNAIL_SCALE:
+  scale = word
+      -> call cfg_overview_thumbnail_scale($scale)
+
+state OVERVIEW_THUMBNAIL_BLUR:
+  amount = number
+      -> call cfg_overview_thumbnail_blur(&amount)
+
+state OVERVIEW_SPACING:
+  spacing = word
+      -> call cfg_overview_spacing($spacing)
+
+state OVERVIEW_ANIMATION_DURATION:
+  duration = word
+      -> call cfg_overview_animation_duration($duration)
+
+state OVERVIEW_BACKGROUND_OPACITY:
+  opacity = word
+      -> call cfg_overview_background_opacity($opacity)
+
+state OVERVIEW_BACKGROUND_BLUR:
+  amount = word
+      -> call cfg_overview_background_blur($amount)
+
+state OVERVIEW_WALLPAPER_PATH:
+  path = string
+      -> call cfg_overview_wallpaper_path($path)
+
+state OVERVIEW_LIVE_PREVIEWS:
+  value = word
+      -> call cfg_overview_live_previews($value)
+
+state OVERVIEW_PARTICLES:
+  count = number
+      -> call cfg_overview_particles(&count)
+
+state OVERVIEW_FPS:
+  fps = number
+      -> call cfg_overview_fps(&fps)
+
+state OVERVIEW_BORDER_COLOR:
+  color = word
+      -> call cfg_overview_border_color($color)
+
+state OVERVIEW_BORDER_COLOR_END:
+  color = word
+      -> call cfg_overview_border_color_end($color)
+
+state OVERVIEW_BORDER_INACTIVE:
+  color = word
+      -> call cfg_overview_border_inactive($color)
+
+state OVERVIEW_BORDER_WIDTH:
+  width = number
+      -> call cfg_overview_border_width(&width)
+
+state OVERVIEW_BORDER_SPEED:
+  speed = number
+      -> call cfg_overview_border_speed(&speed)
+
+################################################################################
+# i3-aiwr: gradient borders
+################################################################################
+
+state GRADIENT_BORDER:
+  'enabled' -> call cfg_gradient_border_toggle("enabled")
+  'disabled' -> call cfg_gradient_border_toggle("disabled")
+  'color_start' -> GRADIENT_BORDER_COLOR_START
+  'color_end' -> GRADIENT_BORDER_COLOR_END
+  'inactive_start' -> GRADIENT_BORDER_INACTIVE_START
+  'inactive_end' -> GRADIENT_BORDER_INACTIVE_END
+  'direction' -> GRADIENT_BORDER_DIRECTION
+  'angle' -> GRADIENT_BORDER_ANGLE
+  'speed' -> GRADIENT_BORDER_SPEED
+  'fps' -> GRADIENT_BORDER_FPS
+
+state GRADIENT_BORDER_INACTIVE_START:
+  color = word
+    -> call cfg_gradient_border_inactive_start($color)
+
+state GRADIENT_BORDER_INACTIVE_END:
+  color = word
+    -> call cfg_gradient_border_inactive_end($color)
+
+state GRADIENT_BORDER_ANGLE:
+  angle = number
+    -> call cfg_gradient_border_angle(&angle)
+
+state GRADIENT_BORDER_SPEED:
+  speed = number
+    -> call cfg_gradient_border_speed(&speed)
+
+state GRADIENT_BORDER_FPS:
+  fps = number
+    -> call cfg_gradient_border_fps(&fps)
+
+state GRADIENT_BORDER_COLOR_START:
+  color = word
+    -> call cfg_gradient_border_color_start($color)
+
+state GRADIENT_BORDER_COLOR_END:
+  color = word
+    -> call cfg_gradient_border_color_end($color)
+
+state GRADIENT_BORDER_DIRECTION:
+  direction = 'horizontal', 'vertical', 'diagonal'
+    -> call cfg_gradient_border_direction($direction)
+
+################################################################################
+# i3-aiwr: workspace transitions
+################################################################################
+
+state WORKSPACE_TRANSITION:
+  'enabled' -> call cfg_workspace_transition("enabled")
+  'disabled' -> call cfg_workspace_transition("disabled")
+  'yes' -> call cfg_workspace_transition("enabled")
+  'no' -> call cfg_workspace_transition("disabled")
+  'duration' -> WORKSPACE_TRANSITION_DURATION
+  'direction' -> WORKSPACE_TRANSITION_DIRECTION
+  'type' -> WORKSPACE_TRANSITION_TYPE
+  'curve' -> WORKSPACE_TRANSITION_CURVE
+  'fps' -> WORKSPACE_TRANSITION_FPS
+
+state WORKSPACE_TRANSITION_DURATION:
+  duration = number
+    -> call cfg_workspace_transition_duration(&duration)
+
+state WORKSPACE_TRANSITION_DIRECTION:
+  direction = 'horizontal', 'vertical'
+    -> call cfg_workspace_transition_direction($direction)
+
+state WORKSPACE_TRANSITION_TYPE:
+  type = 'slide', 'fade', 'zoom'
+    -> call cfg_workspace_transition_type($type)
+
+state WORKSPACE_TRANSITION_CURVE:
+  curve = word
+    -> call cfg_workspace_transition_curve($curve)
+
+state WORKSPACE_TRANSITION_FPS:
+  fps = number
+    -> call cfg_workspace_transition_fps(&fps)
+
+################################################################################
+# i3-aiwr: window animations
+################################################################################
+
+state WINDOW_ANIMATION:
+  'enabled' -> call cfg_window_animation("enabled")
+  'disabled' -> call cfg_window_animation("disabled")
+  'yes' -> call cfg_window_animation("enabled")
+  'no' -> call cfg_window_animation("disabled")
+  'duration' -> WINDOW_ANIMATION_DURATION
+  'scale' -> WINDOW_ANIMATION_SCALE
+  'curve' -> WINDOW_ANIMATION_CURVE
+  'fps' -> WINDOW_ANIMATION_FPS
+  'start_opacity' -> WINDOW_ANIMATION_START_OPACITY
+  'opacity' -> WINDOW_ANIMATION_OPACITY
+  'close' -> WINDOW_ANIMATION_CLOSE
+
+state WINDOW_ANIMATION_DURATION:
+  ms = number
+      -> call cfg_window_animation_duration(&ms)
+
+state WINDOW_ANIMATION_SCALE:
+  scale = number
+      -> call cfg_window_animation_scale(&scale)
+
+state WINDOW_ANIMATION_CURVE:
+  curve = word
+      -> call cfg_window_animation_curve($curve)
+
+state WINDOW_ANIMATION_FPS:
+  fps = number
+      -> call cfg_window_animation_fps(&fps)
+
+state WINDOW_ANIMATION_OPACITY:
+  'enabled' -> call cfg_window_animation_opacity("enabled")
+  'disabled' -> call cfg_window_animation_opacity("disabled")
+
+state WINDOW_ANIMATION_START_OPACITY:
+  pct = number
+      -> call cfg_window_animation_start_opacity(&pct)
+
+state WINDOW_ANIMATION_CLOSE:
+  'enabled' -> call cfg_window_animation_close("enabled")
+  'disabled' -> call cfg_window_animation_close("disabled")
+  'duration' -> WINDOW_ANIMATION_CLOSE_DURATION
+  'scale' -> WINDOW_ANIMATION_CLOSE_SCALE
+  'curve' -> WINDOW_ANIMATION_CLOSE_CURVE
+  'opacity' -> WINDOW_ANIMATION_CLOSE_OPACITY
+
+state WINDOW_ANIMATION_CLOSE_DURATION:
+  ms = number
+      -> call cfg_window_animation_close_duration(&ms)
+
+state WINDOW_ANIMATION_CLOSE_SCALE:
+  scale = number
+      -> call cfg_window_animation_close_scale(&scale)
+
+state WINDOW_ANIMATION_CLOSE_CURVE:
+  curve = word
+      -> call cfg_window_animation_close_curve($curve)
+
+state WINDOW_ANIMATION_CLOSE_OPACITY:
+  pct = number
+      -> call cfg_window_animation_close_opacity(&pct)
+
+################################################################################
+# i3-aiwr: animation curves
+################################################################################
+
+# bezier <name> <x1> <y1> <x2> <y2>
+state BEZIER:
+  spec = string
+      -> call cfg_bezier($spec)
+
+# spring <name> damping-ratio=1.0 stiffness=1000 epsilon=0.0001 [mass=] [speed=]
+state SPRING:
+  spec = string
+      -> call cfg_spring($spec)
+
+################################################################################
+# i3-aiwr: live resize
+################################################################################
+
+state RESIZE_LIVE:
+  value = word
+      -> call cfg_resize_live($value)
+
+state RESIZE_LIVE_FPS:
+  fps = number
+      -> call cfg_resize_live_fps(&fps)
+
+################################################################################
+# i3-aiwr: scrolling layout
+################################################################################
+
+state DYNAMIC_WORKSPACES:
+  value = word
+      -> call cfg_dynamic_workspaces($value)
+
+state SCROLLING:
+  'width' -> SCROLLING_WIDTH
+  'duration' -> SCROLLING_DURATION
+  'curve' -> SCROLLING_CURVE
+  'center_focus' -> SCROLLING_CENTER_FOCUS
+
+state SCROLLING_WIDTH:
+  pct = number
+      -> call cfg_scrolling_default_width(&pct)
+
+state SCROLLING_DURATION:
+  ms = number
+      -> call cfg_scrolling_duration(&ms)
+
+state SCROLLING_CURVE:
+  curve = word
+      -> call cfg_scrolling_curve($curve)
+
+state SCROLLING_CENTER_FOCUS:
+  'enabled' -> call cfg_scrolling_center_focus("enabled")
+  'disabled' -> call cfg_scrolling_center_focus("disabled")
+
+################################################################################
+# upstream i3
+################################################################################
 
 # smart_borders true|false
 # smart_borders no_gaps
@@ -154,9 +492,9 @@ state DEFAULT_ORIENTATION:
   orientation = 'horizontal', 'vertical', 'auto'
       -> call cfg_default_orientation($orientation)
 
-# workspace_layout <default|stacking|tabbed>
+# workspace_layout <default|stacking|tabbed|scrolling>
 state WORKSPACE_LAYOUT:
-  layout = 'default', 'stacking', 'stacked', 'tabbed'
+  layout = 'default', 'stacking', 'stacked', 'tabbed', 'scrolling'
       -> call cfg_workspace_layout($layout)
 
 # <default_border|new_window> <normal|1pixel|none>

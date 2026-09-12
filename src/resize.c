@@ -8,6 +8,7 @@
  *
  */
 #include "all.h"
+#include "i3/live_resize.h"
 
 /*
  * This is an ugly data structure which we need because there is no standard
@@ -16,12 +17,32 @@
  * extension and only on Mac OS X systems at the moment).
  *
  */
+
+live_resize_config_t live_resize_config = {
+    .enabled = true,
+    .fps = 60,
+};
+
+static double lr_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
+}
+
 struct callback_params {
     orientation_t orientation;
     Con *output;
     xcb_window_t helpwin;
     uint32_t *new_position;
     bool *threshold_exceeded;
+
+    bool live;
+    Con *first;
+    Con *second;
+    uint32_t *applied_position;
+    double *last_apply_ms;
+    Con *scroll_column;
+    double scroll_sign;
 };
 
 DRAGGING_CB(resize_callback) {
@@ -30,42 +51,74 @@ DRAGGING_CB(resize_callback) {
     DLOG("new x = %d, y = %d\n", new_x, new_y);
 
     if (!*params->threshold_exceeded) {
-        xcb_map_window(conn, params->helpwin);
+        if (!params->live) {
+            xcb_map_window(conn, params->helpwin);
+        }
         /* Warp pointer in the same way as resize_graphical_handler() would do
          * if threshold wasn't enabled, but also take into account travelled
          * distance. */
         if (params->orientation == HORIZ) {
             xcb_warp_pointer(conn, XCB_NONE, event->root, 0, 0, 0, 0,
-                             *params->new_position + new_x - event->root_x,
-                             new_y);
+                               *params->new_position + new_x - event->root_x,
+                               new_y);
         } else {
             xcb_warp_pointer(conn, XCB_NONE, event->root, 0, 0, 0, 0,
-                             new_x,
-                             *params->new_position + new_y - event->root_y);
+                               new_x,
+                               *params->new_position + new_y - event->root_y);
         }
         *params->threshold_exceeded = true;
         return;
     }
 
+    const int edge = (params->scroll_column != NULL) ? 1 : 25;
     if (params->orientation == HORIZ) {
         /* Check if the new coordinates are within screen boundaries */
-        if (new_x > (output->rect.x + output->rect.width - 25) ||
-            new_x < (output->rect.x + 25)) {
+        if (new_x > (output->rect.x + output->rect.width - edge) ||
+            new_x < (output->rect.x + edge)) {
             return;
         }
-
         *(params->new_position) = new_x;
-        xcb_configure_window(conn, params->helpwin, XCB_CONFIG_WINDOW_X, params->new_position);
     } else {
-        if (new_y > (output->rect.y + output->rect.height - 25) ||
-            new_y < (output->rect.y + 25)) {
+        if (new_y > (output->rect.y + output->rect.height - edge) ||
+            new_y < (output->rect.y + edge)) {
             return;
         }
-
         *(params->new_position) = new_y;
-        xcb_configure_window(conn, params->helpwin, XCB_CONFIG_WINDOW_Y, params->new_position);
     }
 
+    if (!params->live) {
+        xcb_configure_window(conn, params->helpwin,
+                               (params->orientation == HORIZ ? XCB_CONFIG_WINDOW_X : XCB_CONFIG_WINDOW_Y),
+                               params->new_position);
+        xcb_flush(conn);
+        return;
+    }
+
+    /* i3-aiwr: aplica de verdade, limitado a live_resize_config.fps. Cada
+     * aplicação manda ConfigureNotify aos clientes; sem o limite, um
+     * terminal pesado engasga o arrasto inteiro. */
+    int fps = live_resize_config.fps;
+    if (fps < 15) fps = 15;
+    if (fps > 240) fps = 240;
+    double now = lr_now_ms();
+    if (now - *params->last_apply_ms < 1000.0 / fps) {
+        return;
+    }
+
+    int delta = (int)*params->new_position - (int)*params->applied_position;
+    if (delta == 0) {
+        return;
+    }
+
+    if (params->scroll_column != NULL) {
+        scrolling_resize_column_px(params->scroll_column, (int)(delta * params->scroll_sign));
+        *params->applied_position = *params->new_position;
+        *params->last_apply_ms = now;
+    } else if (resize_neighboring_cons(params->first, params->second, delta, 0)) {
+        *params->applied_position = *params->new_position;
+        *params->last_apply_ms = now;
+        tree_render();
+    }
     xcb_flush(conn);
 }
 
@@ -171,12 +224,21 @@ bool resize_neighboring_cons(Con *first, Con *second, int px, int ppt) {
 }
 
 void resize_graphical_handler(Con *first, Con *second, orientation_t orientation,
-                              const xcb_button_press_event_t *event,
-                              bool use_threshold) {
+                              const xcb_button_press_event_t *event, bool use_threshold,
+                              direction_t direction) {
     Con *output = con_get_output(first);
     DLOG("x = %d, width = %d\n", output->rect.x, output->rect.width);
-    DLOG("first = %p / %s\n", first, first->name);
-    DLOG("second = %p / %s\n", second, second->name);
+    DLOG("first = %p / %s\n", first, first != NULL ? first->name : "(none)");
+    Con *scroll_column = (first->parent != NULL && first->parent->layout == L_SCROLLING) ? first : NULL;
+    double scroll_sign = (direction == D_RIGHT || direction == D_DOWN) ? 1.0 : -1.0;
+
+    DLOG("second = %p / %s\n", second, second != NULL ? second->name : "(none)");
+
+    const bool live = live_resize_config.enabled;
+    /* para desfazer no DRAG_REVERT: no i3 original nada é aplicado durante o
+     * arrasto, então não havia o que desfazer */
+    const double first_percent_before = first->percent;
+    const double second_percent_before = (second != NULL) ? second->percent : 0.0;
 
     x_mask_event_mask(~XCB_EVENT_MASK_ENTER_WINDOW);
     xcb_flush(conn);
@@ -198,34 +260,43 @@ void resize_graphical_handler(Con *first, Con *second, orientation_t orientation
 
     /* Configure the resizebar and snap the pointer. The resizebar runs along
      * the rect of the second con and follows the motion of the pointer. */
-    Rect helprect;
-    helprect.x = second->rect.x;
-    helprect.y = second->rect.y;
     /* Resizes might happen between a split container and a leaf
      * container. Because gaps happen *within* a split container, we need to
      * work with (any) leaf window inside the split, so descend focused. */
     Con *ffirst = con_descend_focused(first);
-    Con *fsecond = con_descend_focused(second);
+    Con *fsecond = (second != NULL) ? con_descend_focused(second) : NULL;
+
+    Rect helprect;
+    helprect.x = (second != NULL) ? second->rect.x
+                                  : (direction == D_RIGHT ? first->rect.x + first->rect.width : first->rect.x);
+    helprect.y = (second != NULL) ? second->rect.y : first->rect.y;
     if (orientation == HORIZ) {
         helprect.width = logical_px(2);
-        helprect.height = second->rect.height;
-        const uint32_t ffirst_right = ffirst->rect.x + ffirst->rect.width;
-        const uint32_t gap = (fsecond->rect.x - ffirst_right);
-        const uint32_t middle = fsecond->rect.x - (gap / 2);
-        DLOG("ffirst->rect = {.x = %u, .width = %u}\n", ffirst->rect.x, ffirst->rect.width);
-        DLOG("fsecond->rect = {.x = %u, .width = %u}\n", fsecond->rect.x, fsecond->rect.width);
-        DLOG("gap = %u, middle = %u\n", gap, middle);
-        initial_position = middle;
+        helprect.height = (second != NULL) ? second->rect.height : first->rect.height;
+        if (fsecond != NULL) {
+            const uint32_t ffirst_right = ffirst->rect.x + ffirst->rect.width;
+            const uint32_t gap = (fsecond->rect.x - ffirst_right);
+            initial_position = fsecond->rect.x - (gap / 2);
+        } else {
+            /* sem vizinho: a régua começa na borda arrastada */
+            initial_position = (direction == D_RIGHT) ? ffirst->rect.x + ffirst->rect.width
+                                                      : ffirst->rect.x;
+        }
     } else {
-        helprect.width = second->rect.width;
+        helprect.width = (second != NULL) ? second->rect.width : first->rect.width;
         helprect.height = logical_px(2);
-        const uint32_t ffirst_bottom = ffirst->rect.y + ffirst->rect.height;
-        const uint32_t gap = (fsecond->rect.y - ffirst_bottom);
-        const uint32_t middle = fsecond->rect.y - (gap / 2);
-        DLOG("ffirst->rect = {.y = %u, .height = %u}\n", ffirst->rect.y, ffirst->rect.height);
-        DLOG("fsecond->rect = {.y = %u, .height = %u}\n", fsecond->rect.y, fsecond->rect.height);
-        DLOG("gap = %u, middle = %u\n", gap, middle);
-        initial_position = middle;
+        if (fsecond != NULL) {
+            const uint32_t ffirst_bottom = ffirst->rect.y + ffirst->rect.height;
+            const uint32_t gap = (fsecond->rect.y - ffirst_bottom);
+            initial_position = fsecond->rect.y - (gap / 2);
+        } else {
+            initial_position = (direction == D_DOWN) ? ffirst->rect.y + ffirst->rect.height
+                                                     : ffirst->rect.y;
+        }
+    }
+
+    if (scroll_column != NULL) {
+        initial_position = (orientation == HORIZ) ? event->root_x : event->root_y;
     }
 
     mask = XCB_CW_BACK_PIXEL;
@@ -237,8 +308,12 @@ void resize_graphical_handler(Con *first, Con *second, orientation_t orientation
     xcb_window_t helpwin = create_window(conn, helprect, XCB_COPY_FROM_PARENT, XCB_COPY_FROM_PARENT,
                                          XCB_WINDOW_CLASS_INPUT_OUTPUT, (orientation == HORIZ ? XCURSOR_CURSOR_RESIZE_HORIZONTAL : XCURSOR_CURSOR_RESIZE_VERTICAL), false, mask, values);
 
-    if (!use_threshold) {
-        xcb_map_window(conn, helpwin);
+    if (!use_threshold && scroll_column == NULL) {
+        /* no modo ao vivo a barra de prévia não é mapeada: o próprio layout
+         * é a prévia */
+        if (!live) {
+            xcb_map_window(conn, helpwin);
+        }
         if (orientation == HORIZ) {
             xcb_warp_pointer(conn, XCB_NONE, event->root, 0, 0, 0, 0,
                              initial_position, event->root_y);
@@ -254,10 +329,14 @@ void resize_graphical_handler(Con *first, Con *second, orientation_t orientation
 
     /* `new_position' will be updated by the `resize_callback'. */
     new_position = initial_position;
+    uint32_t applied_position = initial_position;
+    double last_apply_ms = 0.0;
+    scroll_column = (first->parent != NULL && first->parent->layout == L_SCROLLING) ? first : NULL;
 
     bool threshold_exceeded = !use_threshold;
 
-    const struct callback_params params = {orientation, output, helpwin, &new_position, &threshold_exceeded};
+    const struct callback_params params = {orientation, output, helpwin, &new_position, &threshold_exceeded,
+                                           live, first, second, &applied_position, &last_apply_ms, scroll_column, scroll_sign};
 
     /* Re-render the tree before returning to the event loop (drag_pointer()
      * runs its own event-loop) in case if there are unrendered updates. */
@@ -269,6 +348,27 @@ void resize_graphical_handler(Con *first, Con *second, orientation_t orientation
     xcb_destroy_window(conn, helpwin);
     xcb_destroy_window(conn, grabwin);
     xcb_flush(conn);
+
+    if (live) {
+        if (drag_result == DRAG_REVERT) {
+            first->percent = first_percent_before;
+            if (second != NULL) second->percent = second_percent_before;
+            con_fix_percent(first->parent);
+            tree_render();
+            return;
+        }
+        /* o limite de fps pode ter deixado um resto pendente */
+        const int remaining = (int)new_position - (int)applied_position;
+        if (remaining != 0) {
+            if (scroll_column != NULL) {
+                scrolling_resize_column_px(scroll_column, (int)(remaining * scroll_sign));
+            } else {
+                resize_neighboring_cons(first, second, remaining, 0);
+            }
+        }
+        tree_render();
+        return;
+    }
 
     /* User cancelled the drag so no action should be taken. */
     if (drag_result == DRAG_REVERT) {
@@ -284,6 +384,9 @@ void resize_graphical_handler(Con *first, Con *second, orientation_t orientation
     }
 
     /* if we got thus far, the containers must have valid percentages. */
+    if (second == NULL) {
+        return;
+    }
     assert(first->percent > 0.0);
     assert(second->percent > 0.0);
     const bool result = resize_neighboring_cons(first, second, pixels, 0);

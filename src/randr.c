@@ -924,6 +924,8 @@ static void move_content(Con *con) {
  *
  */
 void randr_query_outputs(void) {
+    workspace_transition_abort();
+    switcher_abort();
     if (!randr_query_outputs_15()) {
         randr_query_outputs_14();
     }

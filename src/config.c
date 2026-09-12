@@ -181,6 +181,28 @@ bool load_configuration(const char *override_configpath, config_load_t load_type
     /* Clear the old config or initialize the data structure */
     memset(&config, 0, sizeof(config));
 
+    /* i3-aiwr: Initialize rounded corners defaults */
+    config.rounded_corners.enabled = false;
+    config.rounded_corners.radius = 8;
+    config.rounded_corners.apply_to_floating = true;
+    config.rounded_corners.apply_to_tiling = true;
+
+    overview_config = (overview_config_t) {
+        .enabled = false,
+        .thumbnail_scale = 20,
+        .spacing = 20,
+        .animation_duration_ms = 300,
+        .show_workspace_names = true,
+        .background_opacity = 80,
+    };
+
+    /* i3-aiwr: Gradient border defaults */
+    gradient_border_init();
+
+    workspace_transition_invalidate_wallpaper();
+
+
+
     /* Initialize default colors */
 #define INIT_COLOR(x, cborder, cbackground, ctext, cindicator) \
     do {                                                       \

@@ -20,6 +20,7 @@ static void render_con_split(Con *con, Con *child, render_params *p, int i);
 static void render_con_stacked(Con *con, Con *child, render_params *p, int i);
 static void render_con_tabbed(Con *con, Con *child, render_params *p, int i);
 static void render_con_dockarea(Con *con, Con *child, render_params *p);
+static void render_con_scrolling(Con *con, Con *child, render_params *p, int i);
 
 /*
  * Returns the height for the decorations
@@ -160,11 +161,14 @@ void render_con(Con *con) {
     } else {
         int i = 0;
         Con *child;
+        scrolling_prepare(con);
         TAILQ_FOREACH (child, &(con->nodes_head), nodes) {
             assert(params.children > 0);
 
             if (con->layout == L_SPLITH || con->layout == L_SPLITV) {
                 render_con_split(con, child, &params, i);
+            } else if (con->layout == L_SCROLLING) {
+                render_con_scrolling(con, child, &params, i);
             } else if (con->layout == L_STACKED) {
                 render_con_stacked(con, child, &params, i);
             } else if (con->layout == L_TABBED) {
@@ -183,7 +187,7 @@ void render_con(Con *con) {
             /* render_con_split() sets the deco_rect width based on the rect
              * width, but the render_con() call updates the rect width by
              * applying gaps, so we need to update deco_rect. */
-            if (con->layout == L_SPLITH || con->layout == L_SPLITV) {
+            if (con->layout == L_SPLITH || con->layout == L_SPLITV || con->layout == L_SCROLLING) {
                 if (con_is_leaf(child)) {
                     if (child->border_style == BS_NORMAL) {
                         child->deco_rect.width = child->rect.width;
@@ -428,6 +432,33 @@ static void render_con_split(Con *con, Con *child, render_params *p, int i) {
         } else {
             child->deco_rect.x = 0;
             child->deco_rect.y = 0;
+            child->deco_rect.width = 0;
+            child->deco_rect.height = 0;
+        }
+    }
+}
+
+static void render_con_scrolling(Con *con, Con *child, render_params *p, int i) {
+    assert(con->layout == L_SCROLLING);
+
+    /* cada coluna tem largura própria (fração da viewport). p->x acumula na
+     * régua sem deslocamento; o deslocamento entra só no x final, então as
+     * colunas fora da tela recebem x negativo ou além da borda e o X recorta. */
+    const int w = scrolling_column_width(con, child);
+
+    child->rect.x = p->x - (int)scrolling_offset(con);
+    child->rect.y = p->y;
+    child->rect.width = w;
+    child->rect.height = p->rect.height;
+    p->x += w;
+
+    if (con_is_leaf(child)) {
+        child->deco_rect.x = 0;
+        child->deco_rect.y = 0;
+        if (child->border_style == BS_NORMAL) {
+            child->deco_rect.width = child->rect.width;
+            child->deco_rect.height = p->deco_height;
+        } else {
             child->deco_rect.width = 0;
             child->deco_rect.height = 0;
         }

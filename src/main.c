@@ -8,6 +8,8 @@
  *
  */
 #include "all.h"
+#include "i3/aiwr_capture.h"
+#include "i3/gradient_border.h"
 #include "shmlog.h"
 
 #include <ev.h>
@@ -686,6 +688,9 @@ int main(int argc, char *argv[]) {
 
     load_configuration(override_configpath, C_LOAD);
 
+    fprintf(stderr, "[i3-aiwr DEBUG] Config loaded: rounded_corners.enabled=%d, radius=%d\n",
++            config.rounded_corners.enabled, config.rounded_corners.radius);
+
     if (config.ipc_socket_path == NULL) {
         /* Fall back to a file name in /tmp/ based on the PID */
         if ((config.ipc_socket_path = getenv("I3SOCK")) == NULL) {
@@ -901,6 +906,8 @@ int main(int argc, char *argv[]) {
     }
     if (!shape_supported) {
         DLOG("shape 1.1 is not present on this server\n");
+    } else {
+        fprintf(stderr, "[i3-aiwr DEBUG] >>> SHAPE 1.1 IS SUPPORTED <<<\n");
     }
 
     restore_connect();
@@ -936,6 +943,7 @@ int main(int argc, char *argv[]) {
         tree_init(greply);
     }
 
+
     free(greply);
 
     /* Setup fake outputs for testing */
@@ -956,6 +964,16 @@ int main(int argc, char *argv[]) {
         DLOG("Checking for XRandR...\n");
         randr_init(&randr_base, disable_randr15 || config.disable_randr15);
     }
+
+    /* i3-aiwr: overview precisa de conn/root/main_loop/keysyms prontos e dos
+     * outputs detectados. Fica FORA do if(needs_tree_init) para rodar também
+     * em restarts (quando o layout é restaurado). */
+    aiwr_capture_init(); /* COMPOSITE: base do overview e da transição */
+    overview_init();
+    gradient_border_init();
+    aiwr_anim_init();
+    window_animation_init();
+    window_animation_seed_existing();
 
     /* We need to force disabling outputs which have been loaded from the
      * layout file but are no longer active. This can happen if the output has

@@ -77,7 +77,8 @@ bool gaps_should_inset_con(Con *con, int children) {
         !con_inside_stacked_or_tabbed(con) &&
         con->parent->type == CT_CON &&
         (con->parent->layout == L_SPLITH ||
-         con->parent->layout == L_SPLITV)) {
+         con->parent->layout == L_SPLITV ||
+         con->parent->layout == L_SCROLLING)) {
         return true;
     }
 
