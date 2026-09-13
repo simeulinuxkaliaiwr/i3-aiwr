@@ -117,6 +117,8 @@ bool scrolling_animating(struct Con *con);
  */
 int scrolling_column_width(struct Con *con, struct Con *child);
 
+int aiwr_count_scrolling_workspaces(void);
+
 /**
  * Returns the nearest ancestor using the scrolling layout, or NULL.
  *

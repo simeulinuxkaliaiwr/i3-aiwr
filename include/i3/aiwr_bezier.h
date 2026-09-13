@@ -38,6 +38,8 @@ typedef struct aiwr_curve {
 } aiwr_curve_t;
 
 void aiwr_curves_init(void);
+int aiwr_curve_count(void);
+const char *aiwr_curve_name_at(int i);
 
 bool aiwr_curve_define(const char *name, double x1, double y1, double x2, double y2);
 bool aiwr_curve_define_spring(const char *name, double damping_ratio, double stiffness,

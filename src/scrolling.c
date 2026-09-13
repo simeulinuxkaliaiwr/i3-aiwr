@@ -33,6 +33,35 @@ static struct {
     int anim_id;
 } scroll_anim;
 
+static bool ws_has_scrolling(Con *con) {
+    if (con == NULL) return false;
+    if (con->layout == L_SCROLLING) return true;
+    Con *c;
+    TAILQ_FOREACH (c, &(con->nodes_head), nodes) {
+        if (ws_has_scrolling(c)) return true;
+    }
+    return false;
+}
+
+/*
+ * Number of workspaces currently using the scrolling layout.
+ *
+ */
+int aiwr_count_scrolling_workspaces(void) {
+    int n = 0;
+    Con *output;
+    TAILQ_FOREACH (output, &(croot->nodes_head), nodes) {
+        if (con_is_internal(output)) continue;
+        Con *content = output_get_content(output);
+        if (content == NULL) continue;
+        Con *ws;
+        TAILQ_FOREACH (ws, &(content->nodes_head), nodes) {
+            if (ws_has_scrolling(ws)) n++;
+        }
+    }
+    return n;
+}
+
 void scrolling_forget(Con *con) {
     if (con == NULL) return;
     if (scroll_anim.con == con) {

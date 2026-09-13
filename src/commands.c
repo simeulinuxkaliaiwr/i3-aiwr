@@ -1021,6 +1021,143 @@ void cmd_switcher(I3_CMD, const char *direction) {
     ysuccess(true);
 }
 
+/*
+ * Implementation of 'aiwr status'.
+ *
+ */
+void cmd_aiwr(I3_CMD, const char *action) {
+    if (strcmp(action, "status") != 0) {
+        yerror("Unknown aiwr action \"%s\"", action);
+        return;
+    }
+
+    y(map_open);
+
+    ystr("version");
+    ystr(I3_VERSION);
+
+    ystr("config_path");
+    ystr(current_configpath ? current_configpath : "(none)");
+
+    ystr("compositor");
+    y(map_open);
+    ystr("capture_available");
+    y(bool, aiwr_capture_available());
+    ystr("external_compositor");
+    y(bool, aiwr_capture_external());
+    ystr("shape_supported");
+    y(bool, shape_supported);
+    y(map_close);
+
+    ystr("features");
+    y(map_open);
+
+    ystr("overview");
+    y(map_open);
+    ystr("enabled");
+    y(bool, overview_config.enabled);
+    ystr("active");
+    y(bool, overview_is_active());
+    ystr("live_previews");
+    y(bool, overview_config.live_previews);
+    ystr("thumbnail_scale");
+    y(integer, overview_config.thumbnail_scale);
+    ystr("fps");
+    y(integer, overview_config.fps);
+    y(map_close);
+
+    ystr("scrolling");
+    y(map_open);
+    ystr("default_width");
+    y(integer, scrolling_config.default_width);
+    ystr("duration_ms");
+    y(integer, scrolling_config.duration_ms);
+    ystr("curve");
+    ystr(scrolling_config.curve ? scrolling_config.curve : "(default)");
+    ystr("workspaces_using_it");
+    y(integer, aiwr_count_scrolling_workspaces());
+    y(map_close);
+
+    ystr("window_animation");
+    y(map_open);
+    ystr("enabled");
+    y(bool, window_animation_config.enabled);
+    ystr("duration_ms");
+    y(integer, window_animation_config.duration_ms);
+    ystr("curve");
+    ystr(window_animation_config.curve ? window_animation_config.curve : "(default)");
+    ystr("close_enabled");
+    y(bool, window_animation_config.close_enabled);
+    ystr("opacity");
+    y(bool, window_animation_config.opacity);
+    y(map_close);
+
+    ystr("workspace_transition");
+    y(map_open);
+    ystr("enabled");
+    y(bool, workspace_transition_config.enabled);
+    ystr("type");
+    ystr(workspace_transition_config.type == WT_FADE ? "fade"
+         : workspace_transition_config.type == WT_ZOOM ? "zoom"
+                                                       : "slide");
+    ystr("direction");
+    ystr(workspace_transition_config.direction == WT_VERTICAL ? "vertical" : "horizontal");
+    ystr("duration_ms");
+    y(integer, workspace_transition_config.duration_ms);
+    ystr("curve");
+    ystr(workspace_transition_config.curve ? workspace_transition_config.curve : "(default)");
+    y(map_close);
+
+    ystr("switcher");
+    y(map_open);
+    ystr("enabled");
+    y(bool, switcher_config.enabled);
+    ystr("max_items");
+    y(integer, switcher_config.max_items);
+    ystr("preview");
+    y(bool, switcher_config.show_preview);
+    y(map_close);
+
+    ystr("rounded_corners");
+    y(map_open);
+    ystr("enabled");
+    y(bool, config.rounded_corners.enabled);
+    ystr("radius");
+    y(integer, config.rounded_corners.radius);
+    y(map_close);
+
+    ystr("gradient_border");
+    y(map_open);
+    ystr("enabled");
+    y(bool, aiwr_gradient.enabled);
+    ystr("speed");
+    y(integer, aiwr_gradient.speed);
+    ystr("inactive_configured");
+    y(bool, aiwr_gradient.inactive_set);
+    y(map_close);
+
+    ystr("live_resize");
+    y(map_open);
+    ystr("enabled");
+    y(bool, live_resize_config.enabled);
+    ystr("fps");
+    y(integer, live_resize_config.fps);
+    y(map_close);
+
+    y(map_close); /* features */
+
+    ystr("curves");
+    y(array_open);
+    for (int i = 0;i < aiwr_curve_count();i++) {
+        ystr(aiwr_curve_name_at(i));
+    }
+    y(array_close);
+
+    y(map_close);
+
+    cmd_output->needs_tree_render = false;
+}
+
 typedef struct user_output_name {
     char *name;
     TAILQ_ENTRY(user_output_name) user_output_names;

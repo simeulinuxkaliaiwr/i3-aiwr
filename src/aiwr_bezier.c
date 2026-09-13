@@ -273,7 +273,15 @@ bool aiwr_curve_define_spring_spec(const char *spec) {
     return true;
 }
 
-/* ------------------------------------------------------------------ eval */
+int aiwr_curve_count(void) {
+    aiwr_curves_init();
+    return num_curves;
+}
+
+const char *aiwr_curve_name_at(int i) {
+    aiwr_curves_init();
+    return (i >= 0 && i < num_curves) ? curves[i].name : NULL;
+}
 
 const aiwr_curve_t *aiwr_curve_get(const char *name) {
     if (name == NULL) return NULL;

@@ -151,6 +151,45 @@ static void free_configuration(void) {
 }
 
 /*
+ * Looks for a config in the i3-aiwr locations before falling back to i3's.
+ * This lets i3-aiwr be installed alongside i3 without either one picking up
+ * the other's config.
+ *
+ */
+static char *aiwr_config_path(const char *override_configpath) {
+    if (override_configpath != NULL) {
+        return get_config_path(override_configpath, true);
+    }
+
+    char *path = NULL;
+    char *xdg = getenv("XDG_CONFIG_HOME");
+    const char *home = getenv("HOME");
+
+    if (xdg != NULL && *xdg != '\0') {
+        sasprintf(&path, "%s/i3-aiwr/config", xdg);
+    } else if (home != NULL) {
+        sasprintf(&path, "%s/.config/i3-aiwr/config", home);
+    }
+    if (path != NULL) {
+        if (access(path, R_OK) == 0) {
+            return path;
+        }
+        free(path);
+        path = NULL;
+    }
+
+    if (home != NULL) {
+        sasprintf(&path, "%s/.i3-aiwr/config", home);
+        if (access(path, R_OK) == 0) {
+            return path;
+        }
+        free(path);
+    }
+
+    return get_config_path(NULL, true);
+}
+
+/*
  * (Re-)loads the configuration file (sets useful defaults before).
  *
  * If you specify override_configpath, only this path is used to look for a
@@ -181,27 +220,87 @@ bool load_configuration(const char *override_configpath, config_load_t load_type
     /* Clear the old config or initialize the data structure */
     memset(&config, 0, sizeof(config));
 
-    /* i3-aiwr: Initialize rounded corners defaults */
+        /* i3-aiwr: every module's config is reset to its defaults here, so that
+     * removing an option from the config file takes effect on reload rather
+     * than only on restart. The string fields are freed first: the structs
+     * are overwritten wholesale below. */
     config.rounded_corners.enabled = false;
     config.rounded_corners.radius = 8;
     config.rounded_corners.apply_to_floating = true;
     config.rounded_corners.apply_to_tiling = true;
 
-    overview_config = (overview_config_t) {
+    FREE(overview_config.wallpaper_path);
+    overview_config = (overview_config_t){
         .enabled = false,
-        .thumbnail_scale = 20,
-        .spacing = 20,
-        .animation_duration_ms = 300,
+        .thumbnail_scale = 45,
+        .spacing = 28,
+        .animation_duration_ms = 240,
         .show_workspace_names = true,
-        .background_opacity = 80,
+        .background_opacity = 55,
+        .background_blur = 0,
+        .thumbnail_blur = 0,
+        .live_previews = true,
+        .particles = 0,
+        .fps = 60,
+        .border_start = {.red = 0.298, .green = 0.471, .blue = 0.600, .alpha = 1.0},
+        .border_end = {.red = 0.157, .green = 0.333, .blue = 0.467, .alpha = 1.0},
+        .border_inactive = {.red = 1.0, .green = 1.0, .blue = 1.0, .alpha = 0.18},
+        .border_width = 3,
+        .border_speed = 45,
+        .wallpaper_path = NULL,
+        .dynamic_workspaces = false,
     };
 
-    /* i3-aiwr: Gradient border defaults */
+    FREE(workspace_transition_config.curve);
+    workspace_transition_config = (workspace_transition_config_t){
+        .enabled = false,
+        .duration_ms = 220,
+        .direction = WT_HORIZONTAL,
+        .type = WT_SLIDE,
+        .fps = 60,
+        .curve = NULL,
+    };
+
+    FREE(window_animation_config.curve);
+    FREE(window_animation_config.close_curve);
+    window_animation_config = (window_animation_config_t){
+        .enabled = false,
+        .duration_ms = 160,
+        .start_scale = 88,
+        .fps = 60,
+        .curve = NULL,
+        .close_enabled = false,
+        .close_duration_ms = 140,
+        .close_scale = 60,
+        .close_curve = NULL,
+        .opacity = true,
+        .start_opacity = 0,
+        .close_opacity = 0,
+    };
+
+    FREE(scrolling_config.curve);
+    scrolling_config = (scrolling_config_t){
+        .default_width = 50,
+        .duration_ms = 200,
+        .curve = NULL,
+        .center_focus = false,
+    };
+
+    switcher_config = (switcher_config_t){
+        .enabled = false,
+        .max_items = 8,
+        .cell_width = 220,
+        .cell_height = 140,
+        .show_preview = true,
+    };
+
+    live_resize_config = (live_resize_config_t){
+        .enabled = false,
+        .fps = 60,
+    };
+
     gradient_border_init();
-
     workspace_transition_invalidate_wallpaper();
-
-
 
     /* Initialize default colors */
 #define INIT_COLOR(x, cborder, cbackground, ctext, cindicator) \
@@ -254,11 +353,12 @@ bool load_configuration(const char *override_configpath, config_load_t load_type
     config.swap_modifier = XCB_KEY_BUT_MASK_SHIFT;
 
     FREE(current_configpath);
-    current_configpath = get_config_path(override_configpath, true);
+    current_configpath = aiwr_config_path(override_configpath);
     if (current_configpath == NULL) {
         die("Unable to find the configuration file (looked at "
-            "$XDG_CONFIG_HOME/i3/config, ~/.i3/config, $XDG_CONFIG_DIRS/i3/config "
-            "and " SYSCONFDIR "/i3/config)");
+            "$XDG_CONFIG_HOME/i3-aiwr/config, ~/.i3-aiwr/config, "
+            "$XDG_CONFIG_HOME/i3/config, ~/.i3/config, "
+            "$XDG_CONFIG_DIRS/i3/config and " SYSCONFDIR "/i3/config)");
     }
 
     IncludedFile *file;

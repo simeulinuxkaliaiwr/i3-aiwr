@@ -354,3 +354,9 @@ void cmd_scrolling(I3_CMD, const char *action);
 void cmd_overview(I3_CMD, const char *action);
 
 void cmd_switcher(I3_CMD, const char *direction);
+
+/**
+ * Implementation of 'aiwr status'.
+ *
+ */
+void cmd_aiwr(I3_CMD, const char *action);
