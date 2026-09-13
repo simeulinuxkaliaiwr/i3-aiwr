@@ -6,8 +6,7 @@ workspace overview with live previews, a niri-style scrolling layout, animated
 window transitions built on real spring physics, rounded corners, animated
 gradient borders, live resizing, and an MRU window switcher.
 
-<!-- Replace with the demo video -->
-https://github.com/USER/i3-aiwr/assets/VIDEO
+https://github.com/user-attachments/assets/57611391-6085-4622-af35-3ad745b21d2b
 
 Everything not listed here behaves exactly like upstream i3.
 
