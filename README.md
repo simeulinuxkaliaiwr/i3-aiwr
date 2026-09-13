@@ -98,7 +98,7 @@ detects a compositor at runtime and adapts.
 ## Building
 
 ```sh
-git clone https://github.com/USER/i3-aiwr.git
+git clone https://github.com/simeulinuxkaliaiwr/i3-aiwr.git
 cd i3-aiwr
 meson setup build
 ninja -C build
