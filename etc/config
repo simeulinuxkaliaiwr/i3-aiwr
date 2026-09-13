@@ -195,6 +195,74 @@ mode "resize" {
 
 bindsym Mod1+r mode "resize"
 
+# i3-aiwr
+# ───────────────────────────────────────────────────────────────────────────
+# See https://github.com/USER/i3-aiwr for the full reference.
+
+# Rounded corners. A visible border makes them much more apparent.
+rounded_corners enabled
+rounded_corners_radius 10
+rounded_corners_floating yes
+rounded_corners_tiling yes
+default_border pixel 3
+
+# Animated gradient borders. Without inactive_start/end, unfocused windows
+# keep i3's solid client.unfocused colour.
+gradient_border enabled
+gradient_border color_start "#4c7899ff"
+gradient_border color_end   "#285577ff"
+gradient_border direction diagonal
+gradient_border speed 45
+gradient_border fps 30
+
+# Windows scale in when opened and out when closed.
+window_animation enabled
+window_animation scale 88
+window_animation duration 160
+window_animation curve md3_decel
+window_animation close enabled
+window_animation close curve md3_accel
+window_animation close duration 140
+
+# Switching workspaces slides between them.
+workspace_transition enabled
+workspace_transition type slide
+workspace_transition duration 200
+workspace_transition curve md3_decel
+
+# Zoomed-out view of every workspace, with live previews.
+# Type to filter, drag windows between workspaces.
+overview enabled
+overview thumbnail_scale 45
+overview spacing 28
+overview background_opacity 55
+bindsym $mod+Tab exec --no-startup-id i3-msg overview toggle
+
+# Alt+Tab through windows in most-recently-used order, across workspaces.
+# Needs a real modifier in the binding: the switcher commits when you
+# release it.
+# switcher enabled
+# bindsym Mod1+Tab switcher next
+# bindsym Mod1+Shift+Tab switcher prev
+
+# Resize windows live while dragging a border, instead of showing an
+# outline. Lower the fps if a slow client makes the drag stutter.
+# resize_live yes
+# resize_live_fps 60
+
+# niri-style scrolling layout: windows become columns of independent width,
+# extending past the screen edge, and the view follows focus. This is a very
+# different tiling model from i3's — try it on one workspace first with
+# $mod+z before turning it on globally.
+# workspace_layout scrolling
+# dynamic_workspaces yes
+# scrolling width 50
+# scrolling duration 200
+# bindsym $mod+z scrolling toggle
+# bindsym $mod+f scrolling maximize
+# bindsym $mod+bracketleft scrolling left
+# bindsym $mod+bracketright scrolling right
+
 # Start i3bar to display a workspace bar (plus the system information i3status
 # finds out, if available)
 bar {
