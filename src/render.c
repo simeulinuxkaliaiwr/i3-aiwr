@@ -450,6 +450,7 @@ static void render_con_scrolling(Con *con, Con *child, render_params *p, int i) 
     child->rect.y = p->y;
     child->rect.width = w;
     child->rect.height = p->rect.height;
+    const int32_t cx = (int32_t)p->x - (int32_t)scrolling_offset(con);
     p->x += w;
 
     if (con_is_leaf(child)) {
