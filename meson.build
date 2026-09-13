@@ -437,8 +437,6 @@ i3srcs = [
   'src/overview.c',
   'src/gradient_border.c',
   'src/aiwr_capture.c',
-  'src/config_directives_gradient_border.c',
-  'src/config_directives_overview.c',
   'src/workspace_transition.c',
   'src/window_animation.c',
   'src/aiwr_bezier.c',

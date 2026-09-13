@@ -1,13 +1,17 @@
 #pragma once
 /*
- * i3-aiwr — alternador de janelas (Alt+Tab).
+ * vim:ts=4:sw=4:expandtab
  *
- * MRU, não espacial: o overview responde "onde está tudo", este responde
- * "me leva de volta ao que eu estava fazendo". Por isso a ordem é de foco
- * recente e atravessa workspaces — justamente o caso em que o overview é
- * pior, porque você teria que procurar com os olhos.
+ * i3-aiwr: the window switcher, bound to Alt+Tab.
  *
- * A ordem sai de graça do i3: focus_head já está em ordem de foco recente.
+ * Most-recently-used, not spatial. The overview answers "where is
+ * everything"; this answers "take me back to what I was doing". So the order
+ * is by recent focus and it crosses workspaces — which is exactly the case
+ * the overview is worst at, since you would have to find the window by eye.
+ *
+ * i3 maintains that order already: focus_head is in most-recently-focused
+ * order, so walking it depth-first from croot gives the list for free.
+ *
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,19 +24,35 @@ struct Con;
 
 typedef struct switcher_config {
     bool enabled;
-    int max_items;   /* além disso, use o overview */
-    int cell_width;  /* px, antes de logical_px */
+    int max_items;  /* past this many windows, use the overview instead */
+    int cell_width; /* px, before logical_px scaling */
     int cell_height;
     bool show_preview;
 } switcher_config_t;
 
 void switcher_init(void);
-/* commands.c: 'switcher next' / 'switcher prev' */
+
+/**
+ * Opens the switcher, or steps the selection if it is already open. Called
+ * from the 'switcher next' and 'switcher prev' commands.
+ *
+ */
 void switcher_open(bool backwards);
+
 bool switcher_is_active(void);
-/* handlers.c, antes do overview_handle_event() */
+
+/**
+ * Called from handle_event(), before the overview hook. Returns true when the
+ * event was consumed.
+ *
+ */
 bool switcher_handle_event(xcb_generic_event_t *event);
-/* randr / shutdown */
+
+/**
+ * Tears down the switcher and releases the keyboard grab. Called on randr
+ * changes and at shutdown.
+ *
+ */
 void switcher_abort(void);
 
 extern switcher_config_t switcher_config;

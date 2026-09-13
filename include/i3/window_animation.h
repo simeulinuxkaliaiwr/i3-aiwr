@@ -1,10 +1,18 @@
 #pragma once
 /*
- * i3-aiwr — animação de abertura de janela.
+ * vim:ts=4:sw=4:expandtab
  *
- * O X não escala o conteúdo de uma janela. Em vez disso animamos só a
- * geometria do FRAME: o filho fica no tamanho final e o frame o revela.
- * Nenhum ConfigureNotify chega ao cliente, então nada de reflow no terminal.
+ * i3-aiwr: window open and close animations.
+ *
+ * X cannot scale a window's contents, so instead of scaling anything we
+ * animate only the FRAME's geometry: the child stays at its final size and
+ * the frame reveals it. No ConfigureNotify reaches the client, so a terminal
+ * does not reflow sixty times a second.
+ *
+ * Closing is different, because the window is already gone by the time we
+ * could draw it. The frame's pixmap is copied into one we own and animated as
+ * a ghost window.
+ *
  */
 #include <stdbool.h>
 #include <stdint.h>
@@ -14,32 +22,56 @@ struct Con;
 
 typedef struct window_animation_config {
     bool enabled;
-    int duration_ms;  /* 0 desliga */
-    int start_scale;  /* % do tamanho final no frame 0 */
-    int fps;          /* compartilhado com as demais animações */
-    char *curve;      /* NULL = ease-out-cubic */
+    int duration_ms; /* 0 disables the open animation */
+    int start_scale; /* percentage of the final size on the first frame */
+    int fps;         /* shared with the other animations */
+    char *curve;     /* NULL for ease-out-cubic */
+
     bool close_enabled;
     int close_duration_ms;
-    int close_scale;
+    int close_scale; /* percentage of the original size on the last frame */
     char *close_curve;
-    bool opacity;
-    int start_opacity;
-    int close_opacity;
+
+    bool opacity;       /* fade alongside the scale; needs a compositor */
+    int start_opacity;  /* percentage on the first frame of an open */
+    int close_opacity;  /* percentage on the last frame of a close */
 } window_animation_config_t;
 
-/* main.c, no arranque — ANTES da primeira janela. Se o módulo se inicializar
- * sozinho no primeiro map, o silêncio de arranque engole essa janela. */
+/**
+ * Called from main.c at startup, before the first window. If the module
+ * initialised itself on the first map instead, the startup quiet period would
+ * swallow that very window.
+ *
+ */
 void window_animation_init(void);
-/* main.c, depois da árvore montada (restart in-place). */
+
+/**
+ * Called from main.c after the tree is built. An in-place restart remaps
+ * every window, and without this the whole session would animate at once.
+ *
+ */
 void window_animation_seed_existing(void);
-/* x.c, logo depois do xcb_map_window(con->frame.id). Só anima o primeiro
- * map de cada frame — trocar de workspace remapeia e não deve animar. */
+
+/**
+ * Called from x.c, just after xcb_map_window() on the frame. Only the first
+ * map of each frame is an open: a workspace switch remaps windows and must
+ * not animate.
+ *
+ */
 void window_animation_on_map(struct Con *con);
-/* x.c, junto do aiwr_stale_forget() em x_con_kill(). */
+
+/**
+ * Called from the first line of _x_con_kill(), before anything is freed.
+ *
+ */
+void window_animation_on_close(struct Con *con);
+
+/**
+ * Called from x_con_kill(), alongside aiwr_stale_forget().
+ *
+ */
 void window_animation_forget(xcb_window_t frame);
 
-void window_animation_on_close(struct Con *con);
 bool window_animation_running(void);
-bool window_animation_current_rect(xcb_window_t frame, Rect *out);
 
 extern window_animation_config_t window_animation_config;

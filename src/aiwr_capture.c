@@ -1,5 +1,8 @@
 /*
- * i3-aiwr — captura de janelas via COMPOSITE. Ver aiwr_capture.h.
+ * vim:ts=4:sw=4:expandtab
+ *
+ * i3-aiwr: window capture via COMPOSITE. See aiwr_capture.h.
+ *
  */
 #include "all.h"
 #include "i3/aiwr_capture.h"
@@ -11,13 +14,13 @@
 
 static struct {
     bool initialized;
-    bool available;   /* extensão COMPOSITE >= 0.2 */
-    bool external;    /* compositor externo (picom) detectado */
-    bool redirected;  /* redirecionamos a root em modo Automatic */
+    bool available;  /* COMPOSITE >= 0.2 is present */
+    bool external;   /* an external compositor was detected */
+    bool redirected; /* we redirected the root in Automatic mode */
     xcb_atom_t bypass_atom, rootpmap_atom, esetroot_atom, cm_atom;
 } cap;
 
-static aiwr_layers_t stale; /* última imagem de cada frame (ver .h) */
+static aiwr_layers_t stale; /* last image of each frame; see the header */
 static aiwr_layer_t *layer_find(aiwr_layers_t *L, xcb_window_t win);
 
 static xcb_atom_t intern_atom(const char *name) {
@@ -150,8 +153,6 @@ xcb_visualtype_t *aiwr_visualtype_for_depth(uint16_t depth) {
     return NULL;
 }
 
-/* ------------------------------------------------------------------ layers */
-
 typedef void (*walk_cb)(Con *con, void *arg);
 
 static void walk_rec(Con *con, Con *skip, walk_cb cb, void *arg) {
@@ -166,7 +167,7 @@ static void walk_rec(Con *con, Con *skip, walk_cb cb, void *arg) {
     }
 }
 
-/* ordem de empilhamento: tiling, floating, fullscreen por cima de tudo */
+/* Stacking order: tiling, then floating, then any fullscreen window on top. */
 static void walk_ws(Con *ws, walk_cb cb, void *arg) {
     Con *fs = con_get_fullscreen_con(ws, CF_OUTPUT);
     if (fs == NULL) fs = con_get_fullscreen_con(ws, CF_GLOBAL);
@@ -203,7 +204,7 @@ static void layer_release(aiwr_layer_t *l) {
     }
 }
 
-/* Só requests assíncronos: seguro dentro de workspace_show(). */
+/* Asynchronous requests only, so this is safe inside workspace_show(). */
 static void layer_name(aiwr_layer_t *l, Con *con) {
     l->window = con->frame.id;
     l->rect = con->rect;
@@ -219,7 +220,7 @@ static bool con_capturable(Con *con) {
     return con->mapped && con->frame.id != XCB_NONE && con->rect.width > 0 && con->rect.height > 0;
 }
 
-/* Verifica o NameWindowPixmap e cria a surface (round-trip). */
+/* Verifies the NameWindowPixmap request and creates the surface. Round-trips. */
 static bool layer_ready(aiwr_layer_t *l) {
     if (l->failed || l->pixmap == XCB_NONE) return false;
     if (l->checked) {
@@ -299,17 +300,17 @@ int aiwr_layers_draw(cairo_t *cr, aiwr_layers_t *L, Rect out, double x, double y
         cairo_translate(cr, x + ((double)l->rect.x - (double)out.x) * sx,
                         y + ((double)l->rect.y - (double)out.y) * sy);
         cairo_scale(cr, sx, sy);
-        /* mesma silhueta que a Shape do frame */
+        /* Same silhouette as the frame's shape. */
         rounded_path(cr, 0, 0, l->rect.width, l->rect.height, l->radius);
         cairo_clip(cr);
         cairo_set_source_surface(cr, l->surface, 0, 0);
         cairo_pattern_set_filter(cairo_get_source(cr), (sx < 0.999 || sy < 0.999) ? CAIRO_FILTER_GOOD : CAIRO_FILTER_FAST);
         if (alpha >= 0.999) {
-            /* Sem compositor externo o servidor IGNORA o alpha das janelas
-             * ARGB e mostra o RGB pré-multiplicado (opaco, escurecido).
-             * SOURCE reproduz exatamente isso no nosso buffer; OVER (com
-             * picom) reproduz a composição do picom. Misturar dava os frames
-             * "pretos translúcidos" que não batem com a tela real. */
+            /* Without an external compositor the server ignores the alpha of
+             * ARGB windows and shows the premultiplied RGB as opaque. SOURCE
+             * reproduces that in our buffer; OVER reproduces what a
+             * compositor does. Mixing the two produced translucent black
+             * frames that did not match the real screen. */
             cairo_set_operator(cr, cap.external ? CAIRO_OPERATOR_OVER : CAIRO_OPERATOR_SOURCE);
             cairo_paint(cr);
         } else {
@@ -330,8 +331,6 @@ void aiwr_layers_free(aiwr_layers_t *L) {
     L->items = NULL;
     L->count = 0;
 }
-
-/* ------------------------------------------------------------------- stale */
 
 static void stale_cb(Con *con, void *arg) {
     if (!con_capturable(con)) return;
@@ -364,8 +363,8 @@ typedef struct {
     int n;
 } stale_collect_t;
 
-/* Copia o pixmap de uma camada do cache para um pixmap nosso. XCB_NONE se
- * não deu. */
+/* Copies a cached layer's pixmap into one we own. XCB_NONE on failure. */
+
 static xcb_pixmap_t stale_pixmap_copy(aiwr_layer_t *s) {
     if (s->pixmap == XCB_NONE || s->rect.width == 0 || s->rect.height == 0) {
         return XCB_NONE;
@@ -397,8 +396,8 @@ static void stale_owned_cb(Con *con, void *arg) {
     aiwr_layer_t *s = layer_find(&stale, con->frame.id);
     if (s == NULL) return;
     if (s->rect.width != con->rect.width || s->rect.height != con->rect.height) return;
-    /* precisa estar pronta: o cookie do NameWindowPixmap tem que ter sido
-     * verificado antes de copiarmos dela */
+    /* The layer has to be ready: the NameWindowPixmap cookie must have been
+     * verified before we can copy from it. */
     if (!layer_ready(s)) return;
 
     xcb_pixmap_t copy = stale_pixmap_copy(s);
@@ -412,7 +411,7 @@ static void stale_owned_cb(Con *con, void *arg) {
     l->depth = s->depth;
     l->rect = con->rect;
     l->radius = rounded_corners_radius_for(con);
-    l->surface = NULL; /* aiwr_layers_ensure_surfaces cria a partir do nosso */
+    l->surface = NULL; /* aiwr_layers_ensure_surfaces builds it from our copy */
     sc->n++;
 }
 
@@ -422,8 +421,6 @@ int aiwr_layers_collect_stale_owned(aiwr_layers_t *L, Con *ws) {
     walk_ws(ws, stale_owned_cb, &sc);
     return sc.n;
 }
-
-/* --------------------------------------------------------------- wallpaper */
 
 cairo_surface_t *aiwr_wallpaper_surface(int *w, int *h) {
     xcb_atom_t atoms[2] = {cap.rootpmap_atom, cap.esetroot_atom};
@@ -459,7 +456,7 @@ void aiwr_set_overlay_hints(xcb_window_t win, const char *name) {
         xcb_change_property(conn, XCB_PROP_MODE_REPLACE, win, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8, strlen(name), name);
     }
     if (cap.bypass_atom != XCB_NONE) {
-        uint32_t v = 2; /* 2 = nunca fazer bypass/unredirect por causa desta janela */
+        uint32_t v = 2; /* 2 = never unredirect because of this window */
         xcb_change_property(conn, XCB_PROP_MODE_REPLACE, win, cap.bypass_atom, XCB_ATOM_CARDINAL, 32, 1, &v);
     }
 }

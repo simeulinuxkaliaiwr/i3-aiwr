@@ -1,16 +1,19 @@
 #pragma once
 /*
- * i3-aiwr — curvas de animação.
+ * vim:ts=4:sw=4:expandtab
  *
- * Dois tipos:
- *  - bezier: cubic-bezier, convenção do CSS e do Hyprland (P0 = (0,0),
- *    P3 = (1,1), só os dois pontos de controle importam). y pode passar de 1:
- *    é daí que vem o overshoot.
- *  - spring: oscilador harmônico amortecido, mesmos parâmetros do niri
- *    (damping-ratio, stiffness, epsilon, mass). Uma mola não tem duração:
- *    roda até assentar dentro de epsilon. O tempo de assentamento é calculado
- *    quando a curva é definida e vira a duração da animação — a duração da
- *    config é ignorada para molas.
+ * i3-aiwr: animation curves, of two kinds.
+ *
+ * A bezier is a cubic-bezier in the CSS and Hyprland convention: P0 is (0,0),
+ * P3 is (1,1), and only the two control points matter. y may exceed 1, which
+ * is where overshoot comes from.
+ *
+ * A spring is a damped harmonic oscillator taking niri's parameters —
+ * damping-ratio, stiffness, epsilon and mass. A spring has no duration: it
+ * runs until it settles within epsilon. That settle time is computed when the
+ * curve is defined and becomes the animation's duration, so the duration set
+ * in the config is ignored for springs.
+ *
  */
 #include <stdbool.h>
 
@@ -31,22 +34,42 @@ typedef struct aiwr_curve {
     double stiffness;
     double mass;
     double epsilon;
-    double settle_ms; /* calculado em aiwr_curve_define_spring */
+    double settle_ms; /* computed in aiwr_curve_define_spring */
 } aiwr_curve_t;
 
 void aiwr_curves_init(void);
+
 bool aiwr_curve_define(const char *name, double x1, double y1, double x2, double y2);
 bool aiwr_curve_define_spring(const char *name, double damping_ratio, double stiffness,
                               double mass, double epsilon, double speed);
-/* "nome 0.05 0.7 0.1 1" — formato da diretiva bezier. */
+
+/**
+ * Parses the bezier directive: "name 0.05 0.7 0.1 1".
+ *
+ */
 bool aiwr_curve_define_spec(const char *spec);
-/* "nome damping-ratio=1.0 stiffness=1000 epsilon=0.0001 [mass=1.0]" —
- * formato da diretiva spring. Chaves em qualquer ordem. */
+
+/**
+ * Parses the spring directive:
+ * "name damping-ratio=1.0 stiffness=1000 epsilon=0.0001 [mass=] [speed=]".
+ * The keys may appear in any order.
+ *
+ */
 bool aiwr_curve_define_spring_spec(const char *spec);
 
 const aiwr_curve_t *aiwr_curve_get(const char *name);
-/* Avalia em p (0..1). Sem curva, cai em ease-out-cubic. */
+
+/**
+ * Evaluates the curve at p, which runs from 0 to 1. With no curve, falls back
+ * to ease-out-cubic.
+ *
+ */
 double aiwr_curve_eval(const aiwr_curve_t *c, double p);
 double aiwr_curve_eval_named(const char *name, double p);
-/* Duração natural em ms, ou 0 se a curva não tem uma (bezier). */
+
+/**
+ * Returns the curve's natural duration in milliseconds, or 0 for a curve that
+ * has none.
+ *
+ */
 double aiwr_curve_natural_duration_ms(const aiwr_curve_t *c);

@@ -1,5 +1,8 @@
 /*
- * i3-aiwr — layout de rolagem. Ver scrolling.h.
+ * vim:ts=4:sw=4:expandtab
+ *
+ * i3-aiwr: the scrolling layout. See scrolling.h.
+ *
  */
 #include "all.h"
 #include "i3/scrolling.h"
@@ -22,8 +25,8 @@ scrolling_config_t scrolling_config = {
     .center_focus = false,
 };
 
-/* Uma rolagem por vez: rolar duas colunas ao mesmo tempo no mesmo container
- * não faz sentido, e a segunda simplesmente substitui a primeira. */
+/* One scroll at a time. Scrolling two columns of the same container
+ * simultaneously makes no sense, so a new scroll simply replaces the old. */
 static struct {
     Con *con;
     double from, to;
@@ -64,8 +67,9 @@ void scrolling_toggle_layout(Con *con) {
 
     Con *sc = ws_find_scrolling(ws);
     if (sc != NULL) {
-        /* saindo: em split os percent têm que somar 1, e em rolagem cada um é
-         * a largura da própria coluna. con_fix_percent normaliza. */
+        /* Leaving: in a split the percentages must sum to 1, whereas in
+         * scrolling each one is that column's own width. con_fix_percent
+         * normalises them. */
         sc->layout = L_SPLITH;
         sc->scroll_offset = 0.0;
         ws->workspace_layout = L_DEFAULT;
@@ -174,7 +178,7 @@ void scrolling_cycle_width(Con *con, bool backwards) {
     int idx = 0;
     for (int i = 0; i < n; i++) {
         if (fabs(width_presets[i] - cur) < 0.02) { idx = i; break; }
-        /* largura fora dos presets: entra no mais próximo acima */
+        /* A width outside the presets snaps to the next one up. */
         if (width_presets[i] > cur) { idx = backwards ? i : i - 1; break; }
         idx = i;
     }
@@ -188,12 +192,12 @@ void scrolling_cycle_width(Con *con, bool backwards) {
     scrolling_reveal(column);
 }
 
-/* Chamado pelo render antes de posicionar as colunas: fechar ou encolher uma
- * coluna pode deixar o deslocamento maior que o máximo, e aí sobra espaço
- * vazio à direita sem jeito de voltar. */
+/* Called by the renderer before the columns are positioned. Closing or
+ * shrinking a column can leave the offset past its maximum, which would show
+ * empty space on the right with no way to scroll back. */
 void scrolling_prepare(Con *con) {
     if (con == NULL || con->layout != L_SCROLLING) return;
-    /* no meio de uma animação o alvo já foi calculado; não atropela */
+    /* Mid-animation the target is already computed; do not fight it. */
     if (scroll_anim.con == con) return;
     con->scroll_offset = clamp_offset(con, con->scroll_offset, scrolling_total_width(con));
 }
@@ -217,7 +221,7 @@ double scrolling_offset(Con *con) {
     return (con != NULL) ? con->scroll_offset : 0.0;
 }
 
-/* Largura de uma coluna em px, dada a viewport. */
+/* Width of a column in pixels, given the viewport. */
 int scrolling_column_width(Con *con, Con *child) {
     double pct = child->percent;
     if (pct <= 0.0) pct = scrolling_config.default_width / 100.0;
@@ -225,7 +229,7 @@ int scrolling_column_width(Con *con, Con *child) {
     return (w < 1) ? 1 : w;
 }
 
-/* x (sem deslocamento) e largura de 'column' dentro de 'con'. */
+/* The x (before the offset) and width of a column within its container. */
 static bool column_extent(Con *con, Con *column, double *out_x, double *out_w, double *out_total) {
     double x = 0.0;
     bool found = false;
@@ -246,6 +250,8 @@ static bool column_extent(Con *con, Con *column, double *out_x, double *out_w, d
 static double clamp_offset(Con *con, double offset, double total) {
     const double view = (double)con->rect.width;
 
+    /* A strip narrower than the viewport is centred rather than left-aligned.
+     * The negative offset is deliberate: the renderer subtracts it. */
     if (total < view) {
         return -(view - total) / 2.0;
     }
@@ -255,8 +261,6 @@ static double clamp_offset(Con *con, double offset, double total) {
     if (offset > max) offset = max;
     return offset;
 }
-
-/* ------------------------------------------------------------- animação */
 
 static void scroll_step(double p, double e, void *data) {
     Con *con = scroll_anim.con;
@@ -290,14 +294,12 @@ static void scroll_to_offset(Con *con, double target) {
     scroll_anim.to = target;
     scroll_anim.anim_id = aiwr_anim_start(scrolling_config.duration_ms, scrolling_config.curve,
                                           scroll_step, scroll_done, NULL);
-    if (scroll_anim.anim_id == 0) { /* duração 0 ou mola instantânea */
+    if (scroll_anim.anim_id == 0) {
         con->scroll_offset = target;
         scroll_anim.con = NULL;
         tree_render();
     }
 }
-
-/* --------------------------------------------------------------- público */
 
 void scrolling_reveal(Con *column) {
     if (column == NULL) return;
@@ -315,7 +317,8 @@ void scrolling_reveal(Con *column) {
     if (scrolling_config.center_focus) {
         offset = x + w / 2.0 - view / 2.0;
     } else {
-        /* só traz para dentro: não mexe se já está visível inteira */
+        /* Only bring it into view: leave the offset alone if the column is
+         * already fully visible. */
         if (x < offset) {
             offset = x;
         } else if (x + w > offset + view) {
@@ -327,7 +330,7 @@ void scrolling_reveal(Con *column) {
 
 void scrolling_on_focus(Con *con) {
     if (con == NULL) return;
-    /* sobe até a coluna: o focado pode estar dentro de um split aninhado */
+    /* Walk up to the column: the focused con may be inside a nested split. */
     Con *column = con;
     while (column->parent != NULL && column->parent->layout != L_SCROLLING) {
         if (column->type == CT_WORKSPACE) return;
@@ -345,7 +348,7 @@ void scrolling_resize_column(Con *column, int delta_ppt) {
     if (pct <= 0.0) pct = scrolling_config.default_width / 100.0;
     pct += delta_ppt / 100.0;
     if (pct < 0.05) pct = 0.05;
-    if (pct > 4.0) pct = 4.0; /* colunas maiores que a tela são permitidas */
+    if (pct > 4.0) pct = 4.0; /* columns wider than the screen are allowed */
     column->percent = pct;
 
     tree_render();

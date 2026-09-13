@@ -1,5 +1,8 @@
 /*
- * i3-aiwr — alternador de janelas. Ver switcher.h.
+ * vim:ts=4:sw=4:expandtab
+ *
+ * i3-aiwr: the window switcher. See switcher.h.
+ *
  */
 #include "all.h"
 #include "i3/switcher.h"
@@ -51,7 +54,7 @@ static struct {
     int count;
     int selected;
 
-    /* modificadores segurados quando abriu; soltar todos confirma */
+    /* Modifiers held when the switcher opened; releasing them all commits. */
     uint16_t hold_mods;
 
     aiwr_layers_t layers;
@@ -65,8 +68,6 @@ static void sw_step(bool backwards) {
     if (sw.selected >= sw.count) sw.selected = 0;
     sw_render();
 }
-
-/* ------------------------------------------------------------------ utils */
 
 static double sw_now_ms(void) {
     struct timespec ts;
@@ -89,7 +90,6 @@ static void sw_rounded(cairo_t *cr, double x, double y, double w, double h, doub
     cairo_close_path(cr);
 }
 
-/* Quais modificadores estão pressionados agora. */
 static uint16_t sw_current_mods(void) {
     xcb_query_pointer_reply_t *r =
         xcb_query_pointer_reply(conn, xcb_query_pointer(conn, root), NULL);
@@ -99,8 +99,6 @@ static uint16_t sw_current_mods(void) {
     free(r);
     return mask;
 }
-
-/* ------------------------------------------------------------------- MRU */
 
 static void sw_collect(Con *con, Con *skip_internal) {
     if (con == NULL || sw.count >= switcher_config.max_items) return;
@@ -120,8 +118,6 @@ static void sw_collect(Con *con, Con *skip_internal) {
         sw_collect(c, skip_internal);
     }
 }
-
-/* --------------------------------------------------------------- overlay */
 
 static void sw_release_overlay(void) {
     if (sw.front.id != XCB_NONE) draw_util_surface_free(conn, &sw.front);
@@ -175,17 +171,12 @@ static bool sw_ensure_overlay(int W, int H, int x, int y) {
     return true;
 }
 
-/* ---------------------------------------------------------------- render */
-
-/* Cor estável a partir da classe: dá um "ícone" reconhecível sem depender de
- * _NET_WM_ICON. */
 static void sw_class_color(const char *s, double *r, double *g, double *b) {
     uint32_t hash = 2166136261u;
     for (const char *p = s ? s : "?"; *p; p++) {
         hash = (hash ^ (unsigned char)*p) * 16777619u;
     }
     const double hue = (hash % 360) / 360.0;
-    /* HSV -> RGB com S=0.55, V=0.85 */
     const double h6 = hue * 6.0, f = h6 - floor(h6);
     const double v = 0.85, p2 = v * (1 - 0.55), q = v * (1 - 0.55 * f), t = v * (1 - 0.55 * (1 - f));
     switch ((int)floor(h6) % 6) {
@@ -209,7 +200,6 @@ static void sw_draw_fallback(cairo_t *cr, Con *con, double x, double y, double w
     cairo_set_source_rgb(cr, r, g, b);
     cairo_fill(cr);
 
-    /* inicial da classe no centro do quadrado */
     char initial[8];
     snprintf(initial, sizeof(initial), "%c", (char)toupper((unsigned char)cls[0]));
     i3String *s = i3string_from_utf8(initial);
@@ -303,8 +293,6 @@ static void sw_render(void) {
     xcb_flush(conn);
 }
 
-/* -------------------------------------------------------------- lifecycle */
-
 static void sw_teardown(void) {
     if (sw.grabbed) {
         xcb_ungrab_keyboard(conn, XCB_CURRENT_TIME);
@@ -314,8 +302,6 @@ static void sw_teardown(void) {
     sw.active = false;
     sw.count = 0;
     sw.selected = 0;
-    /* estaciona fora da tela em vez de destruir: recriar por Alt+Tab custa
-     * mais que manter a janela viva */
     if (sw.win != XCB_NONE) {
         uint32_t v[] = {(uint32_t)(int32_t)(-sw.w - 64), (uint32_t)(int32_t)(-sw.h - 64)};
         xcb_configure_window(conn, sw.win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, v);
@@ -356,7 +342,7 @@ void switcher_open(bool backwards) {
     if (!sw.initialized) return;
     if (overview_is_active()) return;
 
-    if (sw.active) { /* já aberto: só avança */
+    if (sw.active) { /* already open */
         sw.selected += backwards ? -1 : 1;
         if (sw.selected < 0) sw.selected = sw.count - 1;
         if (sw.selected >= sw.count) sw.selected = 0;
@@ -366,9 +352,8 @@ void switcher_open(bool backwards) {
 
     sw.count = 0;
     sw_collect(croot, NULL);
-    if (sw.count < 2) return; /* nada para alternar */
+    if (sw.count < 2) return;
 
-    /* previews: nomeia o que estiver mapeado, o resto cai no fallback */
     memset(&sw.layers, 0, sizeof(sw.layers));
     if (switcher_config.show_preview && aiwr_capture_available()) {
         Con *output;
@@ -379,11 +364,8 @@ void switcher_open(bool backwards) {
             Con *ws;
             TAILQ_FOREACH (ws, &(content->nodes_head), nodes) {
                 if (workspace_is_visible(ws)) {
-                    /* mapeada: pixmap nomeado, nosso */
                     aiwr_layers_collect(&sw.layers, ws);
                 } else {
-                    /* oculta: cópia própria da última imagem, para não
-                     * depender do cache enquanto o switcher está aberto */
                     aiwr_layers_collect_stale_owned(&sw.layers, ws);
                 }
             }
@@ -417,12 +399,10 @@ void switcher_open(bool backwards) {
     free(gk);
 
     sw.active = true;
-    sw.selected = backwards ? sw.count - 1 : 1; /* 1 = a anterior, o caso comum */
+    sw.selected = backwards ? sw.count - 1 : 1;
     sw_render();
     SWLOG("open: %d items, hold_mods=0x%x, grabbed=%d\n", sw.count, sw.hold_mods, sw.grabbed);
 
-    /* sem modificador segurado (invocado por i3-msg): vira modal, confirma
-     * com Enter e cancela com Esc */
     if (sw.hold_mods == 0) SWLOG("no modifier held; modal mode\n");
 }
 
@@ -447,12 +427,12 @@ bool switcher_handle_event(xcb_generic_event_t *event) {
                 sw_step(true);
                 return true;
             default:
-                return true; /* engole tudo enquanto aberto */
+                return true;
         }
     }
 
     if (type == XCB_KEY_RELEASE) {
-        if (sw.hold_mods == 0) return true; /* modal: só Enter/Esc */
+        if (sw.hold_mods == 0) return true;
         if ((sw_current_mods() & sw.hold_mods) == 0) {
             sw_commit();
         }

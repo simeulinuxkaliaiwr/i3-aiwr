@@ -971,118 +971,311 @@ CFGFUN(bar_finish) {
     /* Simply reset the pointer, but don't free the resources. */
     current_bar = NULL;
 }
-
 /*
- * i3-aiwr: Configuration directives for rounded corners
+ * i3-aiwr configuration directives.
  *
- * Config syntax:
- *   rounded_corners enabled
- *   rounded_corners disabled
- *   rounded_corners_radius 8
- *   rounded_corners_floating yes
- *   rounded_corners_tiling yes
+ * Replaces everything from the existing "i3-aiwr: Configuration directives
+ * for rounded corners" comment (around line 975) to the end of
+ * config_directives.c.
  */
 
-CFGFUN(rounded_corners_toggle, const char *value) {
-     if (strcmp(value, "enabled") == 0) {
-         config.rounded_corners.enabled = true;
-        fprintf(stderr, "[i3-aiwr DEBUG] >>> ROUNDED_CORNERS ENABLED in config <<<\n");
-    } else if (strcmp(value, "disabled") == 0) {
-        config.rounded_corners.enabled = false;
-        fprintf(stderr, "[i3-aiwr DEBUG] >>> ROUNDED_CORNERS DISABLED in config <<<\n");
-    }
+/*******************************************************************************
+ * i3-aiwr directives.
+ ******************************************************************************/
+
+/*
+ * Accepts the spellings i3 users expect for a boolean config value.
+ *
+ */
+static bool aiwr_bool(const char *value) {
+    return (strcmp(value, "enabled") == 0 ||
+            strcmp(value, "yes") == 0 ||
+            strcmp(value, "true") == 0 ||
+            strcmp(value, "on") == 0 ||
+            strcmp(value, "1") == 0);
 }
 
- CFGFUN(rounded_corners_radius, long radius) {
-     if (radius < 0) {
-         ELOG("rounded_corners_radius must be >= 0\n");
-         return;
-     }
-     if (radius > 64) {
-         ELOG("rounded_corners_radius clamped to 64 (was %ld)\n", radius);
-         radius = 64;
-     }
-     config.rounded_corners.radius = (int)radius;
+static int aiwr_clamp(long v, int lo, int hi) {
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return (int)v;
+}
+
+/* rounded corners */
+
+CFGFUN(rounded_corners_toggle, const char *value) {
+    config.rounded_corners.enabled = aiwr_bool(value);
+}
+
+CFGFUN(rounded_corners_radius, long radius) {
+    if (radius < 0) {
+        ELOG("rounded_corners_radius must be >= 0\n");
+        return;
+    }
+    config.rounded_corners.radius = (int)radius;
 }
 
 CFGFUN(rounded_corners_floating, const char *value) {
-    config.rounded_corners.apply_to_floating = (strcmp(value, "yes") == 0);
-    LOG("i3-aiwr: rounded_corners_floating = %s\n", value);
+    config.rounded_corners.floating = aiwr_bool(value);
 }
 
 CFGFUN(rounded_corners_tiling, const char *value) {
-    config.rounded_corners.apply_to_tiling = (strcmp(value, "yes") == 0);
-    LOG("i3-aiwr: rounded_corners_tiling = %s\n", value);
+    config.rounded_corners.tiling = aiwr_bool(value);
 }
 
-CFGFUN(overview_toggle_config, const char *value) {
-    if (strcmp(value, "enabled") == 0) {
-        overview_config.enabled = true;
+/* gradient borders */
+
+CFGFUN(gradient_border_toggle, const char *value) {
+    aiwr_gradient.enabled = aiwr_bool(value);
+}
+
+CFGFUN(gradient_border_color_start, const char *color) {
+    aiwr_gradient.active_start = draw_util_hex_to_color(color);
+}
+
+CFGFUN(gradient_border_color_end, const char *color) {
+    aiwr_gradient.active_end = draw_util_hex_to_color(color);
+}
+
+CFGFUN(gradient_border_inactive_start, const char *color) {
+    aiwr_gradient.inactive_start = draw_util_hex_to_color(color);
+    aiwr_gradient.inactive_set = true;
+}
+
+CFGFUN(gradient_border_inactive_end, const char *color) {
+    aiwr_gradient.inactive_end = draw_util_hex_to_color(color);
+    aiwr_gradient.inactive_set = true;
+}
+
+CFGFUN(gradient_border_direction, const char *direction) {
+    if (strcmp(direction, "horizontal") == 0) {
+        aiwr_gradient.angle = 0;
+    } else if (strcmp(direction, "vertical") == 0) {
+        aiwr_gradient.angle = 90;
     } else {
-        overview_config.enabled = false;
+        aiwr_gradient.angle = 45;
     }
-    fprintf(stderr, "[i3-aiwr] Overview: %s\n", overview_config.enabled ? "enabled" : "disabled");
+}
+
+CFGFUN(gradient_border_angle, const long angle) {
+    aiwr_gradient.angle = (int)(((angle % 360) + 360) % 360);
+}
+
+CFGFUN(gradient_border_speed, const long speed) {
+    aiwr_gradient.speed = (int)(speed < 0 ? 0 : speed);
+}
+
+CFGFUN(gradient_border_fps, const long fps) {
+    aiwr_gradient.fps = aiwr_clamp(fps, 1, 120);
+}
+
+/* overview */
+
+CFGFUN(overview_toggle_config, const char *value) {
+    overview_config.enabled = aiwr_bool(value);
 }
 
 CFGFUN(overview_thumbnail_scale, const char *scale) {
-    long value = atol(scale);
-    if (value < 1 || value > 100) {
-        ELOG("overview_thumbnail_scale must be between 1 and 100\n");
-        return;
-    }
-    overview_config.thumbnail_scale = (int)value;
-    fprintf(stderr, "[i3-aiwr] Overview: thumbnail_scale = %ld\n", value);
+    overview_config.thumbnail_scale = aiwr_clamp(strtol(scale, NULL, 10), 10, 100);
+}
+
+CFGFUN(overview_thumbnail_blur, const long blur) {
+    overview_config.thumbnail_blur = aiwr_clamp(blur, 0, 100);
 }
 
 CFGFUN(overview_spacing, const char *spacing) {
-    overview_config.spacing = (int)atol(spacing);
-    fprintf(stderr, "[i3-aiwr] Overview: spacing = %d\n", overview_config.spacing);
+    overview_config.spacing = aiwr_clamp(strtol(spacing, NULL, 10), 0, 500);
 }
 
 CFGFUN(overview_animation_duration, const char *duration) {
-    overview_config.animation_duration_ms = (int)atol(duration);
-    fprintf(stderr, "[i3-aiwr] Overview: animation_duration = %dms\n",
-            overview_config.animation_duration_ms);
+    overview_config.animation_duration_ms = aiwr_clamp(strtol(duration, NULL, 10), 0, 2000);
 }
 
 CFGFUN(overview_background_opacity, const char *opacity) {
-    long value = atol(opacity);
-    if (value < 0 || value > 100) {
-        ELOG("overview_background_opacity must be between 0 and 100\n");
-        return;
-    }
-    overview_config.background_opacity = (int)value;
-    fprintf(stderr, "[i3-aiwr] Overview: background_opacity = %d\n", (int)value);
+    overview_config.background_opacity = aiwr_clamp(strtol(opacity, NULL, 10), 0, 100);
 }
+
+CFGFUN(overview_background_blur, const char *blur) {
+    overview_config.background_blur = aiwr_clamp(strtol(blur, NULL, 10), 0, 100);
+}
+
+CFGFUN(overview_wallpaper_path, const char *path) {
+    FREE(overview_config.wallpaper_path);
+    overview_config.wallpaper_path = resolve_tilde(path);
+}
+
+CFGFUN(overview_live_previews, const char *value) {
+    overview_config.live_previews = aiwr_bool(value);
+}
+
+CFGFUN(overview_particles, const long count) {
+    overview_config.particles = aiwr_clamp(count, 0, 256);
+}
+
+CFGFUN(overview_fps, const long fps) {
+    overview_config.fps = aiwr_clamp(fps, 15, 240);
+}
+
+CFGFUN(overview_border_color, const char *color) {
+    overview_config.border_start = draw_util_hex_to_color(color);
+}
+
+CFGFUN(overview_border_color_end, const char *color) {
+    overview_config.border_end = draw_util_hex_to_color(color);
+}
+
+CFGFUN(overview_border_inactive, const char *color) {
+    overview_config.border_inactive = draw_util_hex_to_color(color);
+}
+
+CFGFUN(overview_border_width, const long width) {
+    overview_config.border_width = aiwr_clamp(width, 1, 12);
+}
+
+CFGFUN(overview_border_speed, const long speed) {
+    overview_config.border_speed = (int)(speed < 0 ? 0 : speed);
+}
+
+/* workspace transitions */
+
+CFGFUN(workspace_transition, const char *value) {
+    workspace_transition_config.enabled = aiwr_bool(value);
+}
+
+CFGFUN(workspace_transition_duration, const char *duration) {
+    workspace_transition_config.duration_ms = aiwr_clamp(strtol(duration, NULL, 10), 0, 2000);
+}
+
+CFGFUN(workspace_transition_direction, const char *direction) {
+    workspace_transition_config.direction =
+        (strcmp(direction, "vertical") == 0) ? WT_VERTICAL : WT_HORIZONTAL;
+}
+
+CFGFUN(workspace_transition_type, const char *type) {
+    if (strcmp(type, "fade") == 0) {
+        workspace_transition_config.type = WT_FADE;
+    } else if (strcmp(type, "zoom") == 0) {
+        workspace_transition_config.type = WT_ZOOM;
+    } else {
+        workspace_transition_config.type = WT_SLIDE;
+    }
+}
+
+CFGFUN(workspace_transition_curve, const char *name) {
+    FREE(workspace_transition_config.curve);
+    workspace_transition_config.curve = sstrdup(name);
+}
+
+CFGFUN(workspace_transition_fps, const long fps) {
+    workspace_transition_config.fps = aiwr_clamp(fps, 15, 240);
+}
+
+/* window animations */
+
+CFGFUN(window_animation, const char *value) {
+    window_animation_config.enabled = aiwr_bool(value);
+}
+
+CFGFUN(window_animation_duration, const long duration_ms) {
+    window_animation_config.duration_ms = aiwr_clamp(duration_ms, 0, 2000);
+}
+
+CFGFUN(window_animation_scale, const long scale) {
+    window_animation_config.start_scale = aiwr_clamp(scale, 10, 100);
+}
+
 CFGFUN(window_animation_curve, const char *name) {
     FREE(window_animation_config.curve);
     window_animation_config.curve = sstrdup(name);
 }
+
+CFGFUN(window_animation_fps, const long fps) {
+    window_animation_config.fps = aiwr_clamp(fps, 15, 240);
+}
+
+CFGFUN(window_animation_opacity, const char *value) {
+    window_animation_config.opacity = aiwr_bool(value);
+}
+
+CFGFUN(window_animation_start_opacity, const long pct) {
+    window_animation_config.start_opacity = aiwr_clamp(pct, 0, 100);
+}
+
+CFGFUN(window_animation_close, const char *value) {
+    window_animation_config.close_enabled = aiwr_bool(value);
+}
+
+CFGFUN(window_animation_close_duration, const long duration_ms) {
+    window_animation_config.close_duration_ms = aiwr_clamp(duration_ms, 0, 2000);
+}
+
+CFGFUN(window_animation_close_scale, const long scale) {
+    window_animation_config.close_scale = aiwr_clamp(scale, 10, 100);
+}
+
+CFGFUN(window_animation_close_curve, const char *name) {
+    FREE(window_animation_config.close_curve);
+    window_animation_config.close_curve = sstrdup(name);
+}
+
+CFGFUN(window_animation_close_opacity, const long pct) {
+    window_animation_config.close_opacity = aiwr_clamp(pct, 0, 100);
+}
+
+/* animation curves */
+
 CFGFUN(bezier, const char *spec) {
     aiwr_curve_define_spec(spec);
 }
+
+CFGFUN(spring, const char *spec) {
+    aiwr_curve_define_spring_spec(spec);
+}
+
+/* live resize */
+
+CFGFUN(resize_live, const char *value) {
+    live_resize_config.enabled = aiwr_bool(value);
+}
+
+CFGFUN(resize_live_fps, const long fps) {
+    live_resize_config.fps = aiwr_clamp(fps, 15, 240);
+}
+
+/* scrolling layout */
+
+CFGFUN(dynamic_workspaces, const char *value) {
+    overview_config.dynamic_workspaces = aiwr_bool(value);
+}
+
 CFGFUN(scrolling_default_width, const long pct) {
-    scrolling_config.default_width = (int)(pct < 5 ? 5 : (pct > 400 ? 400 : pct));
+    scrolling_config.default_width = aiwr_clamp(pct, 5, 400);
 }
+
 CFGFUN(scrolling_duration, const long ms) {
-    scrolling_config.duration_ms = (int)(ms < 0 ? 0 : (ms > 2000 ? 2000 : ms));
+    scrolling_config.duration_ms = aiwr_clamp(ms, 0, 2000);
 }
+
 CFGFUN(scrolling_curve, const char *name) {
     FREE(scrolling_config.curve);
     scrolling_config.curve = sstrdup(name);
 }
+
 CFGFUN(scrolling_center_focus, const char *value) {
-    scrolling_config.center_focus = (strcmp(value, "enabled") == 0 || strcmp(value, "yes") == 0 ||
-                                     strcmp(value, "true") == 0 || strcmp(value, "on") == 0);
+    scrolling_config.center_focus = aiwr_bool(value);
 }
+
+/* window switcher */
+
 CFGFUN(switcher, const char *value) {
-    switcher_config.enabled = (strcmp(value, "enabled") == 0 || strcmp(value, "yes") == 0 ||
-                               strcmp(value, "true") == 0 || strcmp(value, "on") == 0);
+    switcher_config.enabled = aiwr_bool(value);
 }
+
 CFGFUN(switcher_max_items, const long n) {
-    switcher_config.max_items = (int)(n < 2 ? 2 : (n > 32 ? 32 : n));
+    switcher_config.max_items = aiwr_clamp(n, 2, 32);
 }
+
 CFGFUN(switcher_preview, const char *value) {
-    switcher_config.show_preview = (strcmp(value, "enabled") == 0 || strcmp(value, "yes") == 0 ||
-                                    strcmp(value, "true") == 0 || strcmp(value, "on") == 0);
+    switcher_config.show_preview = aiwr_bool(value);
 }
+

@@ -1,5 +1,9 @@
 /*
- * i3-aiwr — borders with animated gradient colors. See gradient_border.h.
+ * vim:ts=4:sw=4:expandtab
+ *
+ * i3-aiwr: window borders painted with an animated gradient.
+ * See gradient_border.h.
+ *
  */
 #include "all.h"
 #include "i3/gradient_border.h"
@@ -30,6 +34,14 @@ static double now_ms(void) {
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1.0e6;
 }
 
+/*
+ * Builds the linear gradient for a border of the given size. The gradient
+ * runs along the configured angle plus the animation phase, and the endpoints
+ * are pushed out to the rectangle's extent so the full colour range is
+ * visible regardless of the angle. Returns NULL when gradients are off, or
+ * for an inactive window when no inactive colours were configured.
+ *
+ */
 cairo_pattern_t *gradient_border_pattern(double w, double h, bool active) {
     aiwr_gradient_t *c = &aiwr_gradient;
     if (!c->enabled || w <= 0 || h <= 0) return NULL;

@@ -1,5 +1,8 @@
 /*
- * i3-aiwr — transição de workspace. Ver workspace_transition.h.
+ * vim:ts=4:sw=4:expandtab
+ *
+ * i3-aiwr: the workspace transition. See workspace_transition.h.
+ *
  */
 #include "all.h"
 #include "i3/workspace_transition.h"
@@ -22,14 +25,13 @@ workspace_transition_config_t workspace_transition_config = {
 
 workspace_transition_state_t workspace_transition_state;
 
-/* Decodificar o PNG a cada troca de workspace custava mais que a animação
- * inteira. Carrega uma vez; a config invalida. */
+/* Decoding the PNG on every workspace switch cost more than the animation
+ * itself. Load it once; a config reload invalidates it. */
 static cairo_surface_t *wallpaper_cache;
 static bool wallpaper_cached;
 
-/* ------------------------------------------------------------------ utils */
-
-/* Posição de ws na lista do output (para saber de que lado a nova entra). */
+/* Position of a workspace in its output's list, which tells us which side the
+ * incoming one should enter from. */
 static int wt_ws_index(Con *ws) {
     if (ws == NULL || ws->parent == NULL) return -1;
     int i = 0;
@@ -40,8 +42,6 @@ static int wt_ws_index(Con *ws) {
     }
     return -1;
 }
-
-/* ---------------------------------------------------------------- overlay */
 
 static void wt_park_overlay(void) {
     workspace_transition_state_t *s = &workspace_transition_state;
@@ -68,8 +68,6 @@ static void wt_release_overlay(void) {
     s->ov_w = s->ov_h = 0;
 }
 
-/* Overlay do tamanho do output (não da tela: outro monitor não pode apagar).
- * Persistente e estacionado fora da tela — map/unmap faria o picom aplicar fade. */
 static bool wt_ensure_overlay(int W, int H) {
     workspace_transition_state_t *s = &workspace_transition_state;
     if (s->overlay_ready && (s->ov_w != W || s->ov_h != H)) wt_release_overlay();
@@ -106,7 +104,6 @@ static bool wt_ensure_overlay(int W, int H) {
                       XCB_WINDOW_CLASS_INPUT_OUTPUT, visual, mask, values);
     aiwr_set_overlay_hints(s->overlay_window, "i3-aiwr transition");
 
-    /* região de input vazia: cliques atravessam para as janelas reais */
     xcb_shape_rectangles(conn, XCB_SHAPE_SO_SET, XCB_SHAPE_SK_INPUT, XCB_CLIP_ORDERING_UNSORTED,
                          s->overlay_window, 0, 0, 0, NULL);
 
@@ -120,8 +117,6 @@ static bool wt_ensure_overlay(int W, int H) {
     WTLOG("overlay created (%dx%d, depth %d)\n", W, H, depth);
     return true;
 }
-
-/* -------------------------------------------------------------- wallpaper */
 
 static cairo_surface_t *wt_wallpaper(void) {
     if (wallpaper_cached) return wallpaper_cache;
@@ -145,8 +140,6 @@ void workspace_transition_invalidate_wallpaper(void) {
     wallpaper_cached = false;
 }
 
-/* ----------------------------------------------------------------- render */
-
 static void wt_draw_background(cairo_t *cr, int W, int H) {
     cairo_surface_t *wp = wt_wallpaper();
     int iw = wp ? cairo_image_surface_get_width(wp) : 0;
@@ -166,10 +159,6 @@ static void wt_draw_background(cairo_t *cr, int W, int H) {
     cairo_restore(cr);
 }
 
-/* Um grupo por workspace: camadas sobrepostas (frame + pai de stacked/tabbed)
- * resolvem em opacidade cheia, e só o resultado recebe o alpha. Sem isso o
- * fade mostra cada camada transparente por cima da outra. O grupo custa uma
- * surface do tamanho do overlay, então só é usado quando há alpha. */
 static void wt_draw_workspace(cairo_t *cr, aiwr_layers_t *L, Rect out,
                               double dx, double dy, double sc, double alpha) {
     if (L->count == 0 || alpha <= 0.001) return;
@@ -218,7 +207,6 @@ static void wt_render(double e) {
         }
     }
 
-    /* limpa o frame anterior: sem isso os frames se acumulam */
     cairo_save(cr);
     cairo_reset_clip(cr);
     cairo_identity_matrix(cr);
@@ -238,8 +226,6 @@ static void wt_render(double e) {
     }
     aiwr_anim_request_fence();
 }
-
-/* -------------------------------------------------------------- lifecycle */
 
 static void wt_drop_layers(void) {
     workspace_transition_state_t *s = &workspace_transition_state;
@@ -261,7 +247,6 @@ static void wt_done(void *data) {
     s->progress = 0;
 }
 
-/* Corta no estado final. release: também destrói o overlay (randr, shutdown). */
 static void wt_stop(bool release) {
     workspace_transition_state_t *s = &workspace_transition_state;
     if (s->active) {
@@ -301,7 +286,6 @@ void workspace_transition_begin(Con *from, Con *to) {
     if (workspace_transition_config.duration_ms <= 0) return;
     if (from == NULL || to == NULL || from == to) return;
     if (con_is_internal(from) || con_is_internal(to)) return;
-    /* o overview já desenha a troca no próprio overlay */
     if (overview_is_active()) return;
     if (!aiwr_capture_available()) return;
     if (conn == NULL || root_screen == NULL || main_loop == NULL) return;
@@ -309,12 +293,10 @@ void workspace_transition_begin(Con *from, Con *to) {
     if (!s->initialized) workspace_transition_init();
     if (!s->initialized) return;
 
-    /* troca durante uma troca: corta a anterior, sem soltar o overlay */
     if (s->active) wt_stop(false);
 
     Con *output = con_get_output(to);
     if (output == NULL || output->rect.width == 0 || output->rect.height == 0) return;
-    /* só animamos troca dentro do mesmo output */
     if (con_get_output(from) != output) return;
 
     s->out = output->rect;
@@ -324,10 +306,8 @@ void workspace_transition_begin(Con *from, Con *to) {
     int i_from = wt_ws_index(from), i_to = wt_ws_index(to);
     s->sign = (i_to >= 0 && i_from >= 0 && i_to < i_from) ? -1.0 : 1.0;
 
-    /* a que sai ainda está mapeada: captura real agora */
     aiwr_layers_collect(&s->old_layers, from);
     aiwr_stale_store(from);
-    /* a que entra só será mapeada depois do tree_render(): usa a última imagem */
     aiwr_layers_collect_stale_owned(&s->new_layers, to);
 
     bool any_old = aiwr_layers_ensure_surfaces(&s->old_layers);
@@ -340,7 +320,6 @@ void workspace_transition_begin(Con *from, Con *to) {
     s->progress = 0.0;
     s->active = true;
 
-    /* frame 0 (idêntico à tela atual) no front ANTES de o overlay entrar */
     wt_render(0.0);
     uint32_t v[] = {(uint32_t)s->out.x, (uint32_t)s->out.y, XCB_STACK_MODE_ABOVE};
     xcb_configure_window(conn, s->overlay_window,

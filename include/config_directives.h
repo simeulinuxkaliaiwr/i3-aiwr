@@ -124,7 +124,8 @@ CFGFUN(overview_spacing, const char *spacing);
 CFGFUN(overview_animation_duration, const char *duration);
 CFGFUN(overview_background_opacity, const char *opacity);
 CFGFUN(overview_wallpaper_path, const char *wallpaper_path);
-CFGFUN(overview_background_blur, const char *background_path);
+CFGFUN(overview_background_blur, const char *blur);
+CFGFUN(workspace_transition_duration, const char *duration);
 CFGFUN(dynamic_workspaces, const char *dynamic_workspaces);
 /* i3-aiwr: Overview extras */
 CFGFUN(overview_live_previews, const char *value);
@@ -134,8 +135,7 @@ CFGFUN(overview_border_color, const char *color);
 CFGFUN(overview_border_color_end, const char *color);
 CFGFUN(overview_border_inactive, const char *color);
 CFGFUN(overview_border_width, const long width);
-CFGFUN(overview_border_speed, const long speed);
-CFGFUN(overview_thumbnail_blur, long int thumbnail_blur);
+CCFGFUN(overview_thumbnail_blur, const long blur);
 
 /* i3-aiwr: Gradient border */
 CFGFUN(gradient_border_toggle, const char *value);

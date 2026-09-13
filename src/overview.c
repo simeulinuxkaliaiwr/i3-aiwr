@@ -1,15 +1,8 @@
 /*
- * i3-aiwr — Overview niri-like. See overview.h.
+ * vim:ts=4:sw=4:expandtab
  *
- *  • Entrada: a workspace atual "afasta" (zoom-out) até virar uma thumbnail
- *    numa coluna vertical com as demais; a saída faz o caminho inverso para a
- *    workspace escolhida. Frame 0 e frame final são pixel-idênticos à tela.
- *  • Conteúdo: pixmaps nomeados (COMPOSITE) de cada frame. Eles continuam
- *    válidos depois que a workspace sai de cena, então as thumbnails das
- *    workspaces ocultas mostram a última imagem real de cada janela — e não
- *    uma cópia da root (que com picom é só o wallpaper).
- *  • Drag & drop: arraste uma janela de uma thumbnail para outra (ou para o
- *    slot "+" no fim) para movê-la de workspace. Clique numa janela foca ela.
+ * i3-aiwr: the overview. See overview.h.
+ *
  */
 #include "all.h"
 #include "i3/aiwr_capture.h"
@@ -80,14 +73,15 @@ static double ease_out_cubic(double t) {
     return 1.0 - t * t * t;
 }
 
-/* Onde a janela cai, dado o ponteiro em coordenadas do output. */
+/* Resolves where a dragged window will land, given the pointer in output
+ * coordinates. */
 static bool drop_slot_at(workspace_thumbnail_t *t, double ox, double oy, drop_slot_t *out) {
     if (t == NULL || out == NULL || !overview_ws_alive(t->workspace)) return false;
     memset(out, 0, sizeof(*out));
     out->scroll_index = -1;
     out->position = AFTER;
 
-    /* --- rolagem: fatia entre colunas --- */
+    /* Scrolling layout: a slot between columns. */
     Con *sc = ws_scrolling_con(t->workspace);
     if (sc != NULL) {
         const double colw = (scrolling_config.default_width / 100.0) * (double)t->out.width;
@@ -120,7 +114,7 @@ static bool drop_slot_at(workspace_thumbnail_t *t, double ox, double oy, drop_sl
         return true;
     }
 
-    /* --- demais layouts: antes/depois da folha sob o ponteiro --- */
+    /* Every other layout: before or after the leaf under the pointer. */
     Con *leaf = ws_window_at(t->workspace, ox, oy);
     if (leaf == NULL) {
         out->target = NULL;
@@ -133,7 +127,6 @@ static bool drop_slot_at(workspace_thumbnail_t *t, double ox, double oy, drop_sl
     if (parent == NULL) return false;
 
     if (parent->layout == L_STACKED || parent->layout == L_TABBED) {
-        /* vira mais uma aba: não há fatia espacial que seja honesta */
         out->target = leaf;
         out->position = AFTER;
         out->whole = true;
@@ -142,7 +135,8 @@ static bool drop_slot_at(workspace_thumbnail_t *t, double ox, double oy, drop_sl
     }
 
     const Rect r = leaf->rect;
-    /* faixa de 30% da folha no eixo do split, como no tiling_drag */
+    /* A band covering 30% of the leaf along the split axis, as tiling_drag
+     * does. */
     if (con_orientation(parent) == VERT) {
         const double mid = (double)(int32_t)r.y + r.height / 2.0;
         const uint32_t band = (uint32_t)fmax(logical_px(6), r.height * 0.3);
@@ -192,8 +186,8 @@ static void draw_thumbnail_spill(cairo_t *cr, int i, double p) {
     if (y + h < -50 || y > overview_state.screen_height + 50 || w <= 1 || h <= 1) return;
 
     cairo_save(cr);
-    /* recorta só na vertical: a fila pode sair pelos lados, mas não pode
-     * invadir a linha da workspace de cima ou de baixo */
+    /* Clip vertically only: the strip may extend past the sides, but must not
+     * bleed into the workspace above or below. */
     cairo_rectangle(cr, 0, y, overview_state.screen_width, h);
     cairo_clip(cr);
     cairo_push_group(cr);
@@ -242,8 +236,6 @@ static void draw_drop_slot(cairo_t *cr, int i, double p) {
 
     color_t f = overview_config.border_start;
     rounded_rect(cr, rx, ry, rw, rh, radius);
-    /* "container inteiro" é só destaque, não uma fatia: menos preenchimento
-     * para não parecer que a janela vai ocupar tudo */
     cairo_set_source_rgba(cr, f.red, f.green, f.blue, (slot.whole ? 0.16 : 0.32) * p);
     cairo_fill_preserve(cr);
 
@@ -319,7 +311,7 @@ static bool overview_ws_alive(Con *ws) {
 static bool overview_check(xcb_void_cookie_t cookie, const char *what) {
     xcb_generic_error_t *e = xcb_request_check(conn, cookie);
     if (e == NULL) return true;
-    ELOG("Overview: %s failed (error %d, major %d)\n", what, e->error_code, e->major_code);
+    LOG("Overview: %s failed (error %d, major %d)\n", what, e->error_code, e->major_code);
     free(e);
     return false;
 }
@@ -602,8 +594,9 @@ static int draw_tree(cairo_t *cr, Con *con, Rect out, double x, double y, double
             cairo_rectangle(cr, 0, 0, l->rect.width, l->rect.height);
             cairo_clip(cr);
             if (alpha >= 0.999 && !aiwr_capture_external()) {
-                /* sem compositor externo o servidor ignora o alpha das janelas
-                 * ARGB e mostra o RGB pré-multiplicado. SOURCE reproduz isso. */
+                /* Without an external compositor the server ignores the alpha
+                 * of ARGB windows and shows the premultiplied RGB. SOURCE
+                 * reproduces that. */
                 cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
                 cairo_paint(cr);
             } else {
@@ -852,8 +845,6 @@ static int overview_thumbnail_at(double px, double py) {
         thumb_rect(i, p, &x, &y, &w, &h);
         if (py < y || py >= y + h) continue;
         if (px >= x && px < x + w) return i;
-        /* a fila de uma workspace de rolagem passa da thumbnail: a faixa
-         * inteira pertence a ela */
         if (!overview_state.thumbnails[i].new_slot &&
             ws_is_scrolling(overview_state.thumbnails[i].workspace)) {
             return i;
@@ -1063,7 +1054,6 @@ static bool overview_show_overlay(void) {
     return true;
 }
 
-/* substring case-insensitive; needle vazio casa com tudo */
 static bool str_has_ci(const char *hay, const char *needle) {
     if (hay == NULL) return false;
     if (needle == NULL || *needle == '\0') return true;
@@ -1096,13 +1086,11 @@ static bool thumb_matches(int i) {
     if (overview_state.filter_len == 0) return true;
     if (i < 0 || i >= overview_state.num_thumbnails) return false;
     workspace_thumbnail_t *t = &overview_state.thumbnails[i];
-    /* o slot "nova workspace" não tem o que casar */
     if (t->new_slot || !overview_ws_alive(t->workspace)) return false;
     if (str_has_ci(t->workspace->name, overview_state.filter)) return true;
     return con_matches_filter(t->workspace, overview_state.filter);
 }
 
-/* Anda para o próximo/anterior que casa com o filtro. */
 static void overview_step_match(int dir) {
     const int n = overview_state.num_thumbnails;
     if (n <= 0) return;
@@ -1173,7 +1161,7 @@ static void draw_thumbnail(cairo_t *cr, int i, double p) {
         return;
     }
 
-    /* sombra */
+    /* shadow */
     for (int s = 3; s >= 1; s--) {
         rounded_rect(cr, x - s * 2, y + 6 + s * 2, w + s * 4, h + s * 2, radius + s * 2);
         cairo_set_source_rgba(cr, 0, 0, 0, 0.12 * ui);
@@ -1284,7 +1272,7 @@ static void draw_thumbnail(cairo_t *cr, int i, double p) {
         i3string_free(s);
     }
 
-    /* nome à direita */
+    /* workspace name, to the right of the thumbnail */
     if (overview_config.show_workspace_names && alive && ui > 0.05) {
         int nwin = count_windows(t->workspace);
         char info[64];
@@ -1569,7 +1557,7 @@ static void box_blur_pass(uint32_t *src, uint32_t *dst, int W, int H, int radius
         uint32_t *d = dst + line * step;
         int64_t r = 0, g = 0, b = 0;
 
-        /* janela inicial, com as bordas repetidas */
+        /* Initial window, with the edges repeated. */
         for (int i = -radius; i <= radius; i++) {
             int k = i < 0 ? 0 : (i >= len ? len - 1 : i);
             uint32_t px = s[k * stride];
@@ -1678,8 +1666,6 @@ static void overview_drop(int target_idx) {
 
         Con *sc = ws_scrolling_con(target_ws);
         if (sc != NULL) {
-            /* con_attach() embrulha a janela num container novo por causa do
-             * workspace_layout, então ela não entra no container de rolagem. */
             if (con->parent != sc) {
                 Con *old_parent = con->parent;
                 con_detach(con);
@@ -1709,14 +1695,15 @@ static void overview_drop(int target_idx) {
                 con->rect = slot.rect;
             }
         } else {
-            /* splith/splitv: insere antes/depois da folha sob o ponteiro. O
-             * eixo veio da orientação do pai, então não há tree_split a fazer. */
+            /* splith/splitv: insert before or after the leaf under the
+             * pointer. The axis came from the parent's orientation, so there
+             * is no tree_split to do. */
             if (have_slot && !slot.whole && slot.target != NULL &&
                 slot.target != con && con_exists(slot.target)) {
                 insert_con_into(con, slot.target, slot.position);
             }
-            /* i3 só renderiza a workspace visível: sem rect novo a janela
-             * pode cair fora da thumbnail */
+            /* i3 only renders the visible workspace, so without a fresh rect
+             * the window can land outside the thumbnail. */
             if (!workspace_is_visible(target_ws)) {
                 con->rect = have_slot ? slot.rect : target_ws->rect;
             }
@@ -2020,7 +2007,6 @@ bool overview_handle_event(xcb_generic_event_t *event) {
 
             switch (sym) {
                 case XK_Escape:
-                    /* primeiro Esc limpa o filtro, o segundo fecha */
                     if (filtering) {
                         overview_filter_clear();
                         overview_render();
@@ -2049,7 +2035,6 @@ bool overview_handle_event(xcb_generic_event_t *event) {
                     break;
             }
 
-            /* hjkl navegam enquanto não há filtro; depois viram texto */
             if (!filtering) {
                 switch (sym) {
                     case XK_k: case XK_h: overview_prev(); return true;

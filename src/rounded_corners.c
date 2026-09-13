@@ -1,5 +1,9 @@
 /*
- * i3-aiwr — rounded corners. See include/i3/rounded_corners.h.
+ * vim:ts=4:sw=4:expandtab
+ *
+ * i3-aiwr: rounded window corners, applied with the SHAPE extension.
+ * See rounded_corners.h.
+ *
  */
 #include "all.h"
 #include <math.h>
@@ -12,10 +16,23 @@ typedef struct {
     bool prop_checked, prop_owned;
 } rc_entry_t;
 
+/*
+ * One entry per shaped client. The cached geometry lets rounded_corners_apply
+ * skip the shape requests when nothing changed, which matters because it is
+ * called on every render.
+ *
+ */
 static rc_entry_t *entries = NULL;
 static int n_entries = 0;
 static xcb_atom_t owned_atom = XCB_NONE;
 
+/*
+ * _I3_AIWR_ROUNDED marks a client whose shape we set ourselves. Some clients
+ * ship their own shape, and we must not clobber it — but after a restart we
+ * have no memory of which shapes are ours, so the property is how we
+ * recognise our own work.
+ *
+ */
 static xcb_atom_t rc_atom(void) {
     if (owned_atom == XCB_NONE) {
         const char *n = "_I3_AIWR_ROUNDED";
@@ -66,6 +83,15 @@ static bool rc_prop_owned(rc_entry_t *e) {
     return e->prop_owned;
 }
 
+/*
+ * Approximates a rounded rectangle as a list of horizontal spans: one span
+ * per scanline through each corner arc, plus one large rectangle for the
+ * straight middle section. SHAPE takes rectangles, not paths, so the corners
+ * have to be rasterised here.
+ *
+ * Returns the number of rectangles written to out.
+ *
+ */
 int generate_rounded_rectangles(xcb_rectangle_t *out, int max_rects,
                                 int width, int height, int radius) {
     int count = 0;
@@ -218,7 +244,6 @@ void rounded_corners_forget(Con *con) {
     rc_entry_t *e = rc_find(con->window->id);
     if (e == NULL) return;
     if (e->shaped_by_us && shape_supported) {
-        /* janela pode já ter sido destruída: BadWindow é inofensivo */
         xcb_shape_mask(conn, XCB_SHAPE_SO_SET, XCB_SHAPE_SK_BOUNDING, con->window->id, 0, 0, XCB_PIXMAP_NONE);
         xcb_delete_property(conn, con->window->id, rc_atom());
     }
