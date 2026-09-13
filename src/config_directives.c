@@ -1016,11 +1016,11 @@ CFGFUN(rounded_corners_radius, long radius) {
 }
 
 CFGFUN(rounded_corners_floating, const char *value) {
-    config.rounded_corners.floating = aiwr_bool(value);
+    config.rounded_corners.apply_to_floating = aiwr_bool(value);
 }
 
 CFGFUN(rounded_corners_tiling, const char *value) {
-    config.rounded_corners.tiling = aiwr_bool(value);
+    config.rounded_corners.apply_to_tiling = aiwr_bool(value);
 }
 
 /* gradient borders */
@@ -1142,8 +1142,8 @@ CFGFUN(workspace_transition, const char *value) {
     workspace_transition_config.enabled = aiwr_bool(value);
 }
 
-CFGFUN(workspace_transition_duration, const char *duration) {
-    workspace_transition_config.duration_ms = aiwr_clamp(strtol(duration, NULL, 10), 0, 2000);
+CFGFUN(workspace_transition_duration, const long duration_ms) {
+    workspace_transition_config.duration_ms = aiwr_clamp(duration_ms, 0, 2000);
 }
 
 CFGFUN(workspace_transition_direction, const char *direction) {
