@@ -1,5 +1,5 @@
 /*
- *_ i3-aiwr — animação de abertura de janela. Ver window_animation.h.
+ * i3-aiwr — window open/close animations. See window_animation.h.
  */
 #include "all.h"
 #include "i3/window_animation.h"
@@ -12,9 +12,6 @@
 
 #define WALOG(fmt, ...) DLOG("[i3-aiwr] WindowAnim: " fmt, ##__VA_ARGS__)
 
-/* Rede de segurança caso window_animation_init() não seja chamado do main.c:
- * sem ela o primeiro map seria o que inicializa o módulo, e o silêncio de
- * arranque engoliria justamente a primeira janela. */
 #define WA_STARTUP_QUIET_MS 1200.0
 
 window_animation_config_t window_animation_config = {
@@ -48,8 +45,6 @@ static struct {
     bool initialized;
     double init_ms;
 
-    /* frames já mapeados alguma vez: o 1º map é abertura, os demais são
-     * troca de workspace */
     xcb_window_t *seen;
     int num_seen;
 
@@ -57,8 +52,6 @@ static struct {
     int count;
 } wa;
 
-/* _NET_WM_WINDOW_OPACITY: quem compõe é o picom. Sem compositor externo a
- * propriedade é ignorada, por isso o gate em aiwr_capture_external(). */
 static xcb_atom_t wa_opacity_atom(void) {
     static xcb_atom_t atom = XCB_NONE;
     static bool tried = false;
@@ -83,8 +76,6 @@ static void wa_set_opacity(xcb_window_t win, double a) {
     xcb_change_property(conn, XCB_PROP_MODE_REPLACE, win, atom, XCB_ATOM_CARDINAL, 32, 1, &v);
 }
 
-/* Volta ao normal: apagar a propriedade deixa as regras de opacidade do
- * picom valerem de novo. Pôr 100% por cima delas seria errado. */
 static void wa_clear_opacity(xcb_window_t win) {
     xcb_atom_t atom = wa_opacity_atom();
     if (atom == XCB_NONE) return;
@@ -262,8 +253,6 @@ static void wa_finished(void *data) {
     if (con != NULL) {
         wa_clear_opacity(frame);
         wa_apply(con, 1.0);
-        /* a Shape do frame foi calculada para o tamanho final: enquanto
-         * encolhido os cantos aparecem quadrados. Reaplica no fim. */
         rounded_corners_apply(con);
     }
     wa_drop(frame);
@@ -278,9 +267,6 @@ void window_animation_init(void) {
     wa.initialized = true;
 }
 
-/* Marca como já vistos os frames que existem agora. Chamar no arranque,
- * depois da árvore montada: um restart in-place remapeia tudo, e sem isso o
- * mundo inteiro animaria de uma vez. */
 static void wa_seed_rec(Con *con) {
     if (con == NULL) return;
     if (con->frame.id != XCB_NONE) wa_mark_seen(con->frame.id);
@@ -310,7 +296,6 @@ void window_animation_on_map(Con *con) {
     if (window_animation_config.start_scale >= 100) return;
     if (wa_now_ms() - wa.init_ms < WA_STARTUP_QUIET_MS) return;
     if (con->rect.width == 0 || con->rect.height == 0) return;
-    /* esses dois já desenham a tela num overlay próprio */
     if (overview_is_active() || workspace_transition_active()) return;
     if (wa_find(con->frame.id) != NULL) return;
 
@@ -330,7 +315,7 @@ void window_animation_on_map(Con *con) {
     wa.count++;
 
 
-    if (id == 0) return; /* duração 0: já foi ao estado final */
+    if (id == 0) return; /* Already in the final state */
     wa_item_t *added = wa_find(con->frame.id);
     if (added != NULL) added->anim_id = id;
 
