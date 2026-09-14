@@ -1419,9 +1419,173 @@ IPC_HANDLER(get_binding_state) {
     y(free);
 }
 
+/*
+ * Formats the reply for a GET_AIWR_STATUS request and sends it to the client.
+ *
+ * Reports which i3-aiwr features are enabled, which config file was loaded
+ * and what the capture layer detected, so a bug report can start from facts
+ * rather than guesses.
+ *
+ */
+IPC_HANDLER(get_aiwr_status) {
+    yajl_gen gen = ygenalloc();
+    y(map_open);
+
+    ystr("version");
+    ystr(i3_version);
+
+    ystr("config_path");
+    ystr(current_configpath ? current_configpath : "");
+
+    ystr("compositor");
+    y(map_open);
+    ystr("capture_available");
+    y(bool, aiwr_capture_available());
+    ystr("external_compositor");
+    y(bool, aiwr_capture_external());
+    ystr("shape_supported");
+    y(bool, shape_supported);
+    y(map_close);
+
+    ystr("features");
+    y(map_open);
+
+    ystr("overview");
+    y(map_open);
+    ystr("enabled");
+    y(bool, overview_config.enabled);
+    ystr("active");
+    y(bool, overview_is_active());
+    ystr("live_previews");
+    y(bool, overview_config.live_previews);
+    ystr("thumbnail_scale");
+    y(integer, overview_config.thumbnail_scale);
+    ystr("thumbnail_blur");
+    y(integer, overview_config.thumbnail_blur);
+    ystr("fps");
+    y(integer, overview_config.fps);
+    y(map_close);
+
+    ystr("scrolling");
+    y(map_open);
+    ystr("default_width");
+    y(integer, scrolling_config.default_width);
+    ystr("duration_ms");
+    y(integer, scrolling_config.duration_ms);
+    ystr("curve");
+    ystr(scrolling_config.curve ? scrolling_config.curve : "(default)");
+    ystr("center_focus");
+    y(bool, scrolling_config.center_focus);
+    ystr("workspaces_using_it");
+    y(integer, aiwr_count_scrolling_workspaces());
+    y(map_close);
+
+    ystr("window_animation");
+    y(map_open);
+    ystr("enabled");
+    y(bool, window_animation_config.enabled);
+    ystr("duration_ms");
+    y(integer, window_animation_config.duration_ms);
+    ystr("start_scale");
+    y(integer, window_animation_config.start_scale);
+    ystr("curve");
+    ystr(window_animation_config.curve ? window_animation_config.curve : "(default)");
+    ystr("close_enabled");
+    y(bool, window_animation_config.close_enabled);
+    ystr("close_curve");
+    ystr(window_animation_config.close_curve ? window_animation_config.close_curve : "(default)");
+    ystr("opacity");
+    y(bool, window_animation_config.opacity);
+    y(map_close);
+
+    ystr("workspace_transition");
+    y(map_open);
+    ystr("enabled");
+    y(bool, workspace_transition_config.enabled);
+    ystr("type");
+    const char *wt_type = workspace_transition_config.type == WT_FADE    ? "fade"
+                          : workspace_transition_config.type == WT_ZOOM ? "zoom"
+                                                                        : "slide";
+    ystr(wt_type);
+
+    const char *wt_dir = workspace_transition_config.direction == WT_VERTICAL
+                             ? "vertical" : "horizontal";
+    ystr(wt_dir);
+
+    ystr("direction");
+    ystr(workspace_transition_config.direction == WT_VERTICAL ? "vertical" : "horizontal");
+    ystr("duration_ms");
+    y(integer, workspace_transition_config.duration_ms);
+    ystr("curve");
+    ystr(workspace_transition_config.curve ? workspace_transition_config.curve : "(default)");
+    y(map_close);
+
+    ystr("switcher");
+    y(map_open);
+    ystr("enabled");
+    y(bool, switcher_config.enabled);
+    ystr("max_items");
+    y(integer, switcher_config.max_items);
+    ystr("preview");
+    y(bool, switcher_config.show_preview);
+    y(map_close);
+
+    ystr("rounded_corners");
+    y(map_open);
+    ystr("enabled");
+    y(bool, config.rounded_corners.enabled);
+    ystr("radius");
+    y(integer, config.rounded_corners.radius);
+    ystr("floating");
+    y(bool, config.rounded_corners.apply_to_floating);
+    ystr("tiling");
+    y(bool, config.rounded_corners.apply_to_tiling);
+    y(map_close);
+
+    ystr("gradient_border");
+    y(map_open);
+    ystr("enabled");
+    y(bool, aiwr_gradient.enabled);
+    ystr("angle");
+    y(integer, aiwr_gradient.angle);
+    ystr("speed");
+    y(integer, aiwr_gradient.speed);
+    ystr("fps");
+    y(integer, aiwr_gradient.fps);
+    ystr("inactive_configured");
+    y(bool, aiwr_gradient.inactive_set);
+    y(map_close);
+
+    ystr("live_resize");
+    y(map_open);
+    ystr("enabled");
+    y(bool, live_resize_config.enabled);
+    ystr("fps");
+    y(integer, live_resize_config.fps);
+    y(map_close);
+
+    y(map_close); /* features */
+
+    ystr("curves");
+    y(array_open);
+    for (int i = 0; i < aiwr_curve_count(); i++) {
+        ystr(aiwr_curve_name_at(i));
+    }
+    y(array_close);
+
+    y(map_close);
+
+    const unsigned char *payload;
+    ylength length;
+    y(get_buf, &payload, &length);
+
+    ipc_send_client_message(client, length, I3_IPC_REPLY_TYPE_GET_AIWR_STATUS, payload);
+    y(free);
+}
+
 /* The index of each callback function corresponds to the numeric
  * value of the message type (see include/i3/ipc.h) */
-handler_t handlers[13] = {
+handler_t handlers[14] = {
     handle_run_command,
     handle_get_workspaces,
     handle_subscribe,
@@ -1435,6 +1599,7 @@ handler_t handlers[13] = {
     handle_send_tick,
     handle_sync,
     handle_get_binding_state,
+    handle_get_aiwr_status,
 };
 
 /*

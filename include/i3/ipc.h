@@ -69,6 +69,8 @@ typedef struct i3_ipc_header {
 /** Request the current binding state. */
 #define I3_IPC_MESSAGE_TYPE_GET_BINDING_STATE 12
 
+/** i3-aiwr: request the state of the i3-aiwr features. */
+#define I3_IPC_MESSAGE_TYPE_GET_AIWR_STATUS 13
 /*
  * Messages from i3 to clients
  *
@@ -86,6 +88,7 @@ typedef struct i3_ipc_header {
 #define I3_IPC_REPLY_TYPE_TICK 10
 #define I3_IPC_REPLY_TYPE_SYNC 11
 #define I3_IPC_REPLY_TYPE_GET_BINDING_STATE 12
+#define I3_IPC_REPLY_TYPE_GET_AIWR_STATUS 13
 
 /*
  * Events from i3 to clients. Events have the first bit set high.

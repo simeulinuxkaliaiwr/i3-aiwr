@@ -75,6 +75,7 @@ to do that).
 | 10 | +SEND_TICK+ | <<_tick_reply,TICK>> | Sends a tick event with the specified payload.
 | 11 | +SYNC+ | <<_sync_reply,SYNC>> | Sends an i3 sync event with the specified random value to the specified window.
 | 12 | +GET_BINDING_STATE+ | <<_binding_state_reply,BINDING_STATE>> | Request the current binding state, i.e. the currently active binding mode name.
+| 13 | +GET_AIWR_STATUS+ | <<_aiwr_status_reply,AIWR_STATUS>> | i3-aiwr: get the state of the i3-aiwr features, the loaded config path and what the capture layer detected.
 |======================================================
 
 So, a typical message could look like this:
@@ -156,6 +157,8 @@ SYNC (11)::
 	Reply to the SYNC message.
 GET_BINDING_STATE (12)::
 	Reply to the GET_BINDING_STATE message.
+GET_AIWR_STATUS (13)::
+  Reply to the GET_AIWR_STATUS message.
 
 == Messages and replies
 
@@ -911,6 +914,169 @@ member, which is the name of the currently active binding mode as a string.
 -------------------
 { "name": "default" }
 -------------------
+
+[[_aiwr_status_reply]]
+=== GET_AIWR_STATUS
+
+This message type is specific to i3-aiwr and does not exist in upstream i3.
+
+The reply is a single JSON object describing which i3-aiwr features are
+enabled, what the capture layer detected about the X server, and which
+configuration file was loaded. It exists primarily so that a bug report can
+start from facts rather than from guesses.
+
+*Note*: the shape of this reply is not a stable interface. Fields may be
+added, renamed or removed between releases. Do not build a bar or a script on
+top of it.
+
+The top-level keys are:
+
+version (string)::
+	The i3-aiwr version, in the same form as +GET_VERSION+'s
+	+human_readable+.
+config_path (string)::
+	The configuration file that was actually loaded. i3-aiwr looks for
+	+$XDG_CONFIG_HOME/i3-aiwr/config+ and +~/.i3-aiwr/config+ before
+	falling back to i3's own locations, so this is often the first thing
+	worth checking when a feature appears to do nothing.
+environment (object)::
+	What was detected about the X server. See below.
+features (object)::
+	One sub-object per feature. See below.
+curves (array of strings)::
+	The names of every registered animation curve, built-in and
+	configured. A misspelled curve name in the config silently falls back
+	to ease-out-cubic, so this is how you confirm one was registered.
+
+==== environment
+
+composite_available (boolean)::
+	Whether the COMPOSITE extension is present. Live window previews in
+	the overview and the switcher are impossible without it.
+external_compositor (boolean)::
+	Whether an external compositor such as picom owns the
+	+_NET_WM_CM_S<n>+ selection. When false, the X server ignores the
+	alpha channel of ARGB windows, so opacity fading does nothing and
+	previews are composited differently. This is latched at startup, so
+	starting a compositor afterwards is not reflected here.
+shape_supported (boolean)::
+	Whether the SHAPE extension is available at version 1.1 or later.
+	Rounded corners require it.
+
+==== features
+
+Each sub-object reports the effective configuration of one feature, after
+defaults and the config file have both been applied.
+
+overview::
+	+enabled+, +active+ (whether the overview is on screen right now),
+	+live_previews+, +thumbnail_scale+, +thumbnail_blur+ and +fps+.
++
+An +active+ of true while nothing is visible indicates stuck state, which is
+worth reporting.
+scrolling::
+	+default_width+, +duration_ms+, +curve+, +center_focus+ and
+	+workspaces_using_it+.
++
++workspace_layout scrolling+ only applies to workspaces created after the
+config is loaded, so +workspaces_using_it+ can be 0 even when the layout is
+configured.
+window_animation::
+	+enabled+, +duration_ms+, +start_scale+, +curve+, +close_enabled+,
+	+close_curve+ and +opacity+.
+workspace_transition::
+	+enabled+, +type+ (one of +slide+, +fade+, +zoom+), +direction+ (one
+	of +horizontal+, +vertical+), +duration_ms+ and +curve+.
+switcher::
+	+enabled+, +max_items+ and +preview+.
+rounded_corners::
+	+enabled+, +radius+, +floating+ and +tiling+.
+gradient_border::
+	+enabled+, +angle+, +speed+, +fps+ and +inactive_configured+.
++
+When +inactive_configured+ is false, unfocused windows keep i3's solid
++client.unfocused+ colour rather than a gradient.
+live_resize::
+	+enabled+ and +fps+.
+
+A +curve+ of +(default)+ means no curve was configured and the animation uses
+ease-out-cubic. A curve naming a spring supplies its own duration, so the
++duration_ms+ alongside it is ignored.
+
+*Example:*
+--------------------------------------------------------------------------
+{
+ "version": "4.25-32-g76031e98+",
+ "config_path": "/home/you/.config/i3-aiwr/config",
+ "environment": {
+  "composite_available": true,
+  "external_compositor": false,
+  "shape_supported": true
+ },
+ "features": {
+  "overview": {
+   "enabled": true,
+   "active": false,
+   "live_previews": true,
+   "thumbnail_scale": 43,
+   "thumbnail_blur": 35,
+   "fps": 60
+  },
+  "scrolling": {
+   "default_width": 50,
+   "duration_ms": 200,
+   "curve": "spring",
+   "center_focus": false,
+   "workspaces_using_it": 1
+  },
+  "window_animation": {
+   "enabled": true,
+   "duration_ms": 160,
+   "start_scale": 60,
+   "curve": "spring",
+   "close_enabled": true,
+   "close_curve": "close_fast",
+   "opacity": true
+  },
+  "workspace_transition": {
+   "enabled": true,
+   "type": "slide",
+   "direction": "horizontal",
+   "duration_ms": 200,
+   "curve": "(default)"
+  },
+  "switcher": {
+   "enabled": true,
+   "max_items": 8,
+   "preview": true
+  },
+  "rounded_corners": {
+   "enabled": true,
+   "radius": 20,
+   "floating": true,
+   "tiling": true
+  },
+  "gradient_border": {
+   "enabled": true,
+   "angle": 45,
+   "speed": 60,
+   "fps": 30,
+   "inactive_configured": true
+  },
+  "live_resize": {
+   "enabled": true,
+   "fps": 60
+  }
+ },
+ "curves": [
+  "default", "linear", "md3_standard", "md3_decel", "md3_accel",
+  "overshot", "crazyshot", "hyprnostretch", "menu_decel", "menu_accel",
+  "easeInOutCirc", "easeOutCirc", "easeOutExpo", "softAcDecel", "md2",
+  "spring", "spring_snappy", "spring_soft", "spring_bouncy",
+  "spring_wobbly", "snappy"
+ ]
+}
+--------------------------------------------------------------------------
 
 == Events
 

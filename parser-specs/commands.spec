@@ -39,7 +39,6 @@ state INITIAL:
   'switcher' -> SWITCHER_CFG
   'nop' -> NOP
   'scratchpad' -> SCRATCHPAD
-  'aiwr' -> AIWR
   'swap' -> SWAP
   'title_format' -> TITLE_FORMAT
   'title_window_icon' -> TITLE_WINDOW_ICON
@@ -89,10 +88,6 @@ state CRITERION_FROM_STR_END:
 state CRITERION_STR:
   cvalue = word
       -> call cmd_criteria_add($ctype, $cvalue); CRITERIA
-
-state AIWR:
-  action = 'status'
-    -> call cmd_aiwr($action)
 
 # exec [--no-startup-id] <command>
 state EXEC:
